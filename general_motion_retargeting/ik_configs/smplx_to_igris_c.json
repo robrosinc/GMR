@@ -1,0 +1,254 @@
+{
+    "robot_root_name": "base_link",
+    "human_root_name": "pelvis",
+    "ground_height": -0.05,
+    "human_height_assumption": 1.6,
+    "use_ik_match_table1": true,
+    "use_ik_match_table2": true,
+    "human_scale_table": {
+        "pelvis": 1.0,
+        "spine1": 1.0,
+        "spine3": 1.0,
+        "head": 1.0,
+        "left_hip": 1.0,
+        "right_hip": 1.0,
+        "left_knee": 1.0,
+        "right_knee": 1.0,
+        "left_foot": 1.0,
+        "right_foot": 1.0,
+        "left_shoulder": 1.0,
+        "right_shoulder": 1.0,
+        "left_elbow": 1.0,
+        "right_elbow": 1.0,
+        "left_wrist": 1.0,
+        "right_wrist": 1.0
+    },
+    "ik_match_table1": {
+        "base_link": [
+            "spine3",
+            50,
+            20,
+            [0.0, 0.0, 0.0],
+            [0.5, -0.5, -0.5, -0.5]
+        ],
+        "Link_Waist_Pitch": [
+            "pelvis",
+            50,
+            10,
+            [-0.05, 0.0, -0.02],
+            [0.5, -0.5, -0.5, -0.5]
+        ],
+        "Link_Waist_Roll": [
+            "spine1",
+            30,
+            10,
+            [0.0, 0.0, 0.03],
+            [0.5, -0.5, -0.5, -0.5]
+        ],
+        "Link_Hip_Pitch_Left": [
+            "left_hip",
+            50,
+            100,
+            [0.0, 0.02, 0.0],
+            [0.5, -0.5, -0.5, -0.5]
+        ],
+        "Link_Knee_Pitch_Left": [
+            "left_knee",
+            50,
+            100,
+            [0.0, 0.0, 0.0],
+            [0.5, -0.5, -0.5, -0.5]
+        ],
+        "Link_Ankle_Pitch_Left": [
+            "left_foot",
+            100,
+            200,
+            [0.02, 0.015, 0.1],
+            [0.5, -0.5, -0.5, -0.5]
+        ],
+        "Link_Hip_Pitch_Right": [
+            "right_hip",
+            50,
+            100,
+            [0.0, -0.02, 0.0],
+            [0.5, -0.5, -0.5, -0.5]
+        ],
+        "Link_Knee_Pitch_Right": [
+            "right_knee",
+            50,
+            100,
+            [0.0, 0.0, 0.0],
+            [0.5, -0.5, -0.5, -0.5]
+        ],
+        "Link_Ankle_Pitch_Right": [
+            "right_foot",
+            100,
+            200,
+            [0.02, -0.015, 0.1],
+            [0.5, -0.5, -0.5, -0.5]
+        ],
+        "Link_Shoulder_Pitch_Left": [
+            "left_shoulder",
+            5,
+            10,
+            [0.0, 0.0, 0.0],
+            [0.707, 0.0, -0.707, 0.0]
+        ],
+        "Link_Elbow_Pitch_Left": [
+            "left_elbow",
+            5,
+            10,
+            [0.0, 0.0, 0.06],
+            [0.707, 0.0, -0.707, 0.0]
+        ],
+        "Link_Wrist_Yaw_Left": [
+            "left_wrist",
+            5,
+            10,
+            [0.0, 0.0, 0.0],
+            [0.707, 0.0, -0.707, 0.0]
+        ],
+        "Link_Shoulder_Pitch_Right": [
+            "right_shoulder",
+            5,
+            10,
+            [0.0, 0.0, 0.0],
+            [0.0, 0.707, 0.0, 0.707]
+        ],
+        "Link_Elbow_Pitch_Right": [
+            "right_elbow",
+            5,
+            10,
+            [0.0, 0.0, 0.06],
+            [0.0, 0.707, 0.0, 0.707]
+        ],
+        "Link_Wrist_Yaw_Right": [
+            "right_wrist",
+            5,
+            10,
+            [0.0, 0.0, 0.0],
+            [0.0, 0.707, 0.0, 0.707]
+        ],
+        "Link_Neck_Pitch": [
+            "head",
+            10,
+            20,
+            [0.0, 0.0, 0.12],
+            [0.5, -0.5, -0.5, -0.5]
+        ]
+    },
+    "ik_match_table2": {
+        "base_link": [
+            "spine3",
+            50,
+            10,
+            [0.0, 0.0, 0.0],
+            [0.5, -0.5, -0.5, -0.5]
+        ],
+        "Link_Waist_Pitch": [
+            "pelvis",
+            50,
+            10,
+            [-0.05, 0.0, -0.02],
+            [0.5, -0.5, -0.5, -0.5]
+        ],
+        "Link_Waist_Roll": [
+            "spine1",
+            40,
+            10,
+            [0.0, 0.0, 0.03],
+            [0.5, -0.5, -0.5, -0.5]
+        ],
+        "Link_Hip_Pitch_Left": [
+            "left_hip",
+            20,
+            10,
+            [0.0, 0.1, 0.0],
+            [0.5, -0.5, -0.5, -0.5]
+        ],
+        "Link_Knee_Pitch_Left": [
+            "left_knee",
+            200,
+            200,
+            [0.0, 0.1, 0.0],
+            [0.5, -0.5, -0.5, -0.5]
+        ],
+        "Link_Ankle_Pitch_Left": [
+            "left_foot",
+            100,
+            100,
+            [0.02, 0.1, -0.0],
+            [0.5, -0.5, -0.5, -0.5]
+        ],
+        "Link_Hip_Pitch_Right": [
+            "right_hip",
+            20,
+            10,
+            [0.0, -0.1, 0.0],
+            [0.5, -0.5, -0.5, -0.5]
+        ],
+        "Link_Knee_Pitch_Right": [
+            "right_knee",
+            200,
+            200,
+            [0.0, -0.1, 0.0],
+            [0.5, -0.5, -0.5, -0.5]
+        ],
+        "Link_Ankle_Pitch_Right": [
+            "right_foot",
+            100,
+            100,
+            [0.02, -0.1, -0.0],
+            [0.5, -0.5, -0.5, -0.5]
+        ],
+        "Link_Shoulder_Pitch_Left": [
+            "left_shoulder",
+            15,
+            10,
+            [0.0, 0.0, 0.0],
+            [0.707, 0.0, -0.707, 0.0]
+        ],
+        "Link_Elbow_Pitch_Left": [
+            "left_elbow",
+            10,
+            10,
+            [0.0, 0.0, 0.06],
+            [0.707, 0.0, -0.707, 0.0]
+        ],
+        "Link_Wrist_Yaw_Left": [
+            "left_wrist",
+            40,
+            10,
+            [0.0, 0.0, 0.0],
+            [0.707, 0.0, -0.707, 0.0]
+        ],
+        "Link_Shoulder_Pitch_Right": [
+            "right_shoulder",
+            15,
+            10,
+            [0.0, 0.0, 0.0],
+            [0.0, 0.707, 0.0, 0.707]
+        ],
+        "Link_Elbow_Pitch_Right": [
+            "right_elbow",
+            10,
+            10,
+            [0.0, 0.0, 0.06],
+            [0.0, 0.707, 0.0, 0.707]
+        ],
+        "Link_Wrist_Yaw_Right": [
+            "right_wrist",
+            40,
+            10,
+            [0.0, 0.0, 0.0],
+            [0.0, 0.707, 0.0, 0.707]
+        ],
+        "Link_Neck_Pitch": [
+            "head",
+            20,
+            20,
+            [0.0, 0.0, 0.12],
+            [0.5, -0.5, -0.5, -0.5]
+        ]
+    }
+}
