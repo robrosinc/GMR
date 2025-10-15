@@ -54,7 +54,7 @@ if __name__ == "__main__":
         choices=["unitree_g1", "unitree_g1_with_hands", "unitree_h1", "unitree_h1_2",
                  "booster_t1", "booster_t1_29dof","stanford_toddy", "fourier_n1", 
                 "engineai_pm01", "kuavo_s45", "hightorque_hi", "galaxea_r1pro", "berkeley_humanoid_lite", "booster_k1",
-                "pnd_adam_lite", "openloong", "tienkung", "robros_igris_c_v2"],
+                "pnd_adam_lite", "openloong", "tienkung", "robros_igris_c_v2", 'robros_igris_max'],
         default="unitree_g1",
     )
     
@@ -128,13 +128,22 @@ if __name__ == "__main__":
             os.makedirs(save_dir, exist_ok=True)
         qpos_list = []
         # keybody_names = ['Link_Wrist_Pitch_Left', 'Link_Wrist_Pitch_Right', 'Link_Ankle_Pitch_Left', 'Link_Ankle_Pitch_Right']
-        keybody_names = ['Link_Wrist_Pitch_Left', 'Link_Wrist_Pitch_Right', 
-                    'Link_Ankle_Pitch_Left', 'Link_Ankle_Pitch_Right',
-                    'Link_Shoulder_Pitch_Left', 'Link_Shoulder_Pitch_Right',
-                    'Link_Hip_Pitch_Left', 'Link_Hip_Pitch_Right',
-                    'Link_Elbow_Pitch_Left', 'Link_Elbow_Pitch_Right',
-                    'Link_Knee_Pitch_Left', 'Link_Knee_Pitch_Right',
-                    'Link_Neck_Pitch']
+        if args.robot == 'robros_igris_c':
+            keybody_names = ['Link_Wrist_Pitch_Left', 'Link_Wrist_Pitch_Right', 
+                        'Link_Ankle_Pitch_Left', 'Link_Ankle_Pitch_Right',
+                        'Link_Shoulder_Pitch_Left', 'Link_Shoulder_Pitch_Right',
+                        'Link_Hip_Pitch_Left', 'Link_Hip_Pitch_Right',
+                        'Link_Elbow_Pitch_Left', 'Link_Elbow_Pitch_Right',
+                        'Link_Knee_Pitch_Left', 'Link_Knee_Pitch_Right',
+                        'Link_Neck_Pitch']
+        elif args.robot == 'robros_igris_max':
+            keybody_names = ['Left_Arm_Wrist_Roll', 'Right_Arm_Wrist_Roll', 
+                        'Left_Leg_Ankle_Roll_Foot', 'Right_Leg_Ankle_Roll_Foot',
+                        'Left_Arm_Shoulder_Pitch', 'Right_Arm_Shoulder_Pitch',
+                        'Left_Leg_Hip_Pitch', 'Right_Leg_Hip_Pitch',
+                        'Left_Arm_Elbow', 'Right_Arm_Elbow',
+                        'Left_Leg_Knee', 'Right_Leg_Knee',
+                        'Waist_Yaw_Torso']
         keybody_pairs = [
             (name, retarget.robot_body_names[name])
             for name in keybody_names

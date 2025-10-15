@@ -1,0 +1,226 @@
+<?xml version="1.0" ?>
+<mujoco model="igris_max">
+  <compiler angle="radian" coordinate="local" meshdir="meshes"/>
+  <option timestep="0.005" gravity="0 0 -9.81" integrator="Euler"/>
+  <size njmax="2000" nconmax="1000"/>
+  <default>
+    <joint damping="1"/>
+    <geom rgba="0.7 0.7 0.7 1" contype="0" conaffinity="0"/>
+    <motor ctrllimited="true" ctrlrange="-150 150"/>
+  </default>
+  <asset>
+    <mesh name="Pelvis" file="Pelvis.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Waist_Yaw_Torso" file="Waist_Yaw_Torso.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Waist_Pitch" file="Waist_Pitch.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Waist_Roll" file="Waist_Roll.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Left_Arm_Shoulder_Pitch" file="Left_Arm_Shoulder_Pitch.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Left_Arm_Shoulder_Roll" file="Left_Arm_Shoulder_Roll.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Left_Arm_Shoulder_Yaw" file="Left_Arm_Shoulder_Yaw.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Left_Arm_Elbow" file="Left_Arm_Elbow.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Left_Arm_Wrist_Yaw" file="Left_Arm_Wrist_Yaw.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Left_Arm_Wrist_Pitch" file="Left_Arm_Wrist_Pitch.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Left_Arm_Wrist_Roll" file="Left_Arm_Wrist_Roll.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Right_Arm_Shoulder_Pitch" file="Right_Arm_Shoulder_Pitch.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Right_Arm_Shoulder_Roll" file="Right_Arm_Shoulder_Roll.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Right_Arm_Shoulder_Yaw" file="Right_Arm_Shoulder_Yaw.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Right_Arm_Elbow" file="Right_Arm_Elbow.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Right_Arm_Wrist_Yaw" file="Right_Arm_Wrist_Yaw.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Right_Arm_Wrist_Pitch" file="Right_Arm_Wrist_Pitch.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Right_Arm_Wrist_Roll" file="Right_Arm_Wrist_Roll.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Left_Leg_Hip_Pitch" file="Left_Leg_Hip_Pitch.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Left_Leg_Hip_Roll" file="Left_Leg_Hip_Roll.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Left_Leg_Hip_Yaw" file="Left_Leg_Hip_Yaw.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Left_Leg_Knee" file="Left_Leg_Knee.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Left_Leg_Ankle_Pitch" file="Left_Leg_Ankle_Pitch.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Left_Leg_Ankle_Roll_Foot" file="Left_Leg_Ankle_Roll_Foot.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Right_Leg_Hip_Pitch" file="Right_Leg_Hip_Pitch.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Right_Leg_Hip_Roll" file="Right_Leg_Hip_Roll.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Right_Leg_Hip_Yaw" file="Right_Leg_Hip_Yaw.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Right_Leg_Knee" file="Right_Leg_Knee.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Right_Leg_Ankle_Pitch" file="Right_Leg_Ankle_Pitch.stl" scale="1.0 1.0 1.0"/>
+    <mesh name="Right_Leg_Ankle_Roll_Foot" file="Right_Leg_Ankle_Roll_Foot.stl" scale="1.0 1.0 1.0"/>
+  </asset>
+  <worldbody>
+    <body name="Pelvis" pos="0 0 0">
+      <freejoint name="floating_base"/>
+      <inertial pos="5.609e-13 0 -0.04843" mass="11.0002" fullinertia="0.0513 0.04601 0.0239 -1.397e-17 -2.205e-17 0"/>
+      <geom name="geom_Pelvis" type="mesh" mesh="Pelvis" pos="0 0 0" quat="1 0 0 0"/>
+      <body name="Waist_Pitch" pos="0 0 0.055" quat="1 0 0 0">
+        <joint name="Waist_Pitch" type="hinge" axis="0 1 0" range="-0.5236 0.7854" limited="true"/>
+        <inertial pos="-5.382e-12 -6.466e-13 0" mass="0.32641" fullinertia="0.0003569 0.0001834 0.0003969 -3.648e-16 0 4.019e-19"/>
+        <geom name="geom_Waist_Pitch" type="mesh" mesh="Waist_Pitch" pos="0 0 0" quat="1 0 0 0"/>
+        <body name="Waist_Roll" pos="0 0 0" quat="1 0 0 0">
+          <joint name="Waist_Roll" type="hinge" axis="1 0 0" range="-0.5236 0.5236" limited="true"/>
+          <inertial pos="0 -1.915e-13 0.08932" mass="0.40874" fullinertia="0.001759 0.001113 0.001818 6.445e-18 -6.999e-15 -5.803e-16"/>
+          <geom name="geom_Waist_Roll" type="mesh" mesh="Waist_Roll" pos="0 0 0" quat="1 0 0 0"/>
+          <body name="Waist_Yaw_Torso" pos="0 0 0.121" quat="1 0 0 0">
+            <joint name="Waist_Yaw" type="hinge" axis="0 0 1" range="-0.7854 0.7854" limited="true"/>
+            <inertial pos="-0.01006 0 0.16575" mass="14.3583" fullinertia="0.2033 0.1673 0.1257 2.298e-08 -2.5353e-07 0.006583"/>
+            <geom name="geom_Waist_Yaw_Torso" type="mesh" mesh="Waist_Yaw_Torso" pos="0 0 0" quat="1 0 0 0"/>
+            <body name="Left_Arm_Shoulder_Pitch" pos="0 0.135 0.279" quat="1 0 0 0">
+              <joint name="Left_Arm_Shoulder_Pitch" type="hinge" axis="0 1 0" range="-3.14 3.14" limited="true"/>
+              <inertial pos="1.73e-13 0.0315 0" mass="0.60301" fullinertia="0.0008978 0.001501 0.001625 3.268e-15 0 -3.326e-19"/>
+              <geom name="geom_Left_Arm_Shoulder_Pitch" type="mesh" mesh="Left_Arm_Shoulder_Pitch" pos="0 0 0" quat="1 0 0 0"/>
+              <body name="Left_Arm_Shoulder_Roll" pos="0 0.055 0" quat="1 0 0 0">
+                <joint name="Left_Arm_Shoulder_Roll" type="hinge" axis="1 0 0" range="-0.56 3.14" limited="true"/>
+                <inertial pos="-1.25e-12 0 -0.00731" mass="1.65688" fullinertia="0.002065 0.002235 0.001843 -5.869e-16 -1.16e-09 -8.747e-14"/>
+                <geom name="geom_Left_Arm_Shoulder_Roll" type="mesh" mesh="Left_Arm_Shoulder_Roll" pos="0 0 0" quat="1 0 0 0"/>
+                <body name="Left_Arm_Shoulder_Yaw" pos="0 0 -0.06" quat="1 0 0 0">
+                  <joint name="Left_Arm_Shoulder_Yaw" type="hinge" axis="0 0 1" range="-3.14 3.14" limited="true"/>
+                  <inertial pos="-5.427e-12 0 -0.07443" mass="1.79785" fullinertia="0.004697 0.004775 0.00139 3.833e-19 1.137e-17 0"/>
+                  <geom name="geom_Left_Arm_Shoulder_Yaw" type="mesh" mesh="Left_Arm_Shoulder_Yaw" pos="0 0 0" quat="1 0 0 0"/>
+                  <body name="Left_Arm_Elbow" pos="0 0 -0.18" quat="1 0 0 0">
+                    <joint name="Left_Arm_Elbow" type="hinge" axis="0 1 0" range="-2.3562 0" limited="true"/>
+                    <inertial pos="6.029e-08 0 -0.00576" mass="0.65503" fullinertia="0.0006114 0.0006478 0.0004939 5.7e-10 -5.627e-16 1.08e-09"/>
+                    <geom name="geom_Left_Arm_Elbow" type="mesh" mesh="Left_Arm_Elbow" pos="0 0 0" quat="1 0 0 0"/>
+                    <body name="Left_Arm_Wrist_Yaw" pos="0 0 -0.05" quat="1 0 0 0">
+                      <joint name="Left_Arm_Wrist_Yaw" type="hinge" axis="0 0 1" range="-3.14 3.14" limited="true"/>
+                      <inertial pos="0 0 -0.12416" mass="1.75208" fullinertia="0.0096 0.009574 0.000802 1.406e-18 2.132e-18 -1.1258e-07"/>
+                      <geom name="geom_Left_Arm_Wrist_Yaw" type="mesh" mesh="Left_Arm_Wrist_Yaw" pos="0 0 0" quat="1 0 0 0"/>
+                      <body name="Left_Arm_Wrist_Pitch" pos="0 0 -0.27" quat="1 0 0 0">
+                        <joint name="Left_Arm_Wrist_Pitch" type="hinge" axis="0 1 0" range="-0.5236 0.5236" limited="true"/>
+                        <inertial pos="0 0 0.0009" mass="0.1259" fullinertia="3.9922e-05 3.41025e-05 3.66122e-05 1.139e-16 5.969e-17 0"/>
+                        <geom name="geom_Left_Arm_Wrist_Pitch" type="mesh" mesh="Left_Arm_Wrist_Pitch" pos="0 0 0" quat="1 0 0 0"/>
+                        <body name="Left_Arm_Wrist_Roll" pos="0 0 0" quat="1 0 0 0">
+                          <joint name="Left_Arm_Wrist_Roll" type="hinge" axis="1 0 0" range="-0.7854 0.7854" limited="true"/>
+                          <inertial pos="0 0 -0.08525" mass="0.90889" fullinertia="0.001234 0.002075 0.0009758 6.26e-16 5.684e-18 5.364e-18"/>
+                          <geom name="geom_Left_Arm_Wrist_Roll" type="mesh" mesh="Left_Arm_Wrist_Roll" pos="0 0 0" quat="1 0 0 0"/>
+                        </body>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+            <body name="Right_Arm_Shoulder_Pitch" pos="0 -0.135 0.279" quat="1 0 0 0">
+              <joint name="Right_Arm_Shoulder_Pitch" type="hinge" axis="0 1 0" range="-3.14 3.14" limited="true"/>
+              <inertial pos="-1.765e-13 -0.0315 0" mass="0.60301" fullinertia="0.0008978 0.001501 0.001625 3.267e-15 0 -3.514e-19"/>
+              <geom name="geom_Right_Arm_Shoulder_Pitch" type="mesh" mesh="Right_Arm_Shoulder_Pitch" pos="0 0 0" quat="1 0 0 0"/>
+              <body name="Right_Arm_Shoulder_Roll" pos="0 -0.055 0" quat="1 0 0 0">
+                <joint name="Right_Arm_Shoulder_Roll" type="hinge" axis="1 0 0" range="-3.14 0.56" limited="true"/>
+                <inertial pos="-1.25e-12 0 -0.00731" mass="1.65688" fullinertia="0.002065 0.002235 0.001843 -5.869e-16 -1.16e-09 -8.747e-14"/>
+                <geom name="geom_Right_Arm_Shoulder_Roll" type="mesh" mesh="Right_Arm_Shoulder_Roll" pos="0 0 0" quat="1 0 0 0"/>
+                <body name="Right_Arm_Shoulder_Yaw" pos="0 0 -0.06" quat="1 0 0 0">
+                  <joint name="Right_Arm_Shoulder_Yaw" type="hinge" axis="0 0 1" range="-3.14 3.14" limited="true"/>
+                  <inertial pos="-5.427e-12 0 -0.07443" mass="1.79785" fullinertia="0.004697 0.004775 0.00139 3.583e-19 1.137e-17 0"/>
+                  <geom name="geom_Right_Arm_Shoulder_Yaw" type="mesh" mesh="Right_Arm_Shoulder_Yaw" pos="0 0 0" quat="1 0 0 0"/>
+                  <body name="Right_Arm_Elbow" pos="0 0 -0.18" quat="1 0 0 0">
+                    <joint name="Right_Arm_Elbow" type="hinge" axis="0 1 0" range="-2.3562 0" limited="true"/>
+                    <inertial pos="6.029e-08 0 -0.00576" mass="0.65503" fullinertia="0.0006114 0.0006478 0.0004939 5.7e-10 -5.627e-16 1.08e-09"/>
+                    <geom name="geom_Right_Arm_Elbow" type="mesh" mesh="Right_Arm_Elbow" pos="0 0 0" quat="1 0 0 0"/>
+                    <body name="Right_Arm_Wrist_Yaw" pos="0 0 -0.05" quat="1 0 0 0">
+                      <joint name="Right_Arm_Wrist_Yaw" type="hinge" axis="0 0 1" range="-3.14 3.14" limited="true"/>
+                      <inertial pos="0 0 -0.12416" mass="1.75208" fullinertia="0.0096 0.009574 0.000802 1.342e-18 9.6e-10 -1.1258e-07"/>
+                      <geom name="geom_Right_Arm_Wrist_Yaw" type="mesh" mesh="Right_Arm_Wrist_Yaw" pos="0 0 0" quat="1 0 0 0"/>
+                      <body name="Right_Arm_Wrist_Pitch" pos="0 0 -0.27" quat="1 0 0 0">
+                        <joint name="Right_Arm_Wrist_Pitch" type="hinge" axis="0 1 0" range="-0.5236 0.5236" limited="true"/>
+                        <inertial pos="0 0 0.0009" mass="0.1259" fullinertia="3.9922e-05 3.41025e-05 3.66122e-05 1.139e-16 5.969e-17 0"/>
+                        <geom name="geom_Right_Arm_Wrist_Pitch" type="mesh" mesh="Right_Arm_Wrist_Pitch" pos="0 0 0" quat="1 0 0 0"/>
+                        <body name="Right_Arm_Wrist_Roll" pos="0 0 0" quat="1 0 0 0">
+                          <joint name="Right_Arm_Wrist_Roll" type="hinge" axis="1 0 0" range="-0.7854 0.7854" limited="true"/>
+                          <inertial pos="0 0 -0.08525" mass="0.90889" fullinertia="0.001234 0.002075 0.0009758 6.254e-16 0 5.447e-19"/>
+                          <geom name="geom_Right_Arm_Wrist_Roll" type="mesh" mesh="Right_Arm_Wrist_Roll" pos="0 0 0" quat="1 0 0 0"/>
+                        </body>
+                      </body>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="Left_Leg_Hip_Pitch" pos="0 0.024 -0.11" quat="1 0 0 0">
+        <joint name="Left_Leg_Hip_Pitch" type="hinge" axis="0 1 0" range="-1.5708 1.5708" limited="true"/>
+        <inertial pos="0 0.04281 0" mass="0.6373" fullinertia="0.001598 0.001645 0.001926 -1.721e-15 0 2.648e-18"/>
+        <geom name="geom_Left_Leg_Hip_Pitch" type="mesh" mesh="Left_Leg_Hip_Pitch" pos="0 0 0" quat="1 0 0 0"/>
+        <body name="Left_Leg_Hip_Roll" pos="0 0.08 0" quat="1 0 0 0">
+          <joint name="Left_Leg_Hip_Roll" type="hinge" axis="1 0 0" range="-0.5236 1.5708" limited="true"/>
+          <inertial pos="0 0 -0.01776" mass="1.70209" fullinertia="0.003254 0.002922 0.001992 -7.853e-16 0 1.686e-15"/>
+          <geom name="geom_Left_Leg_Hip_Roll" type="mesh" mesh="Left_Leg_Hip_Roll" pos="0 0 0" quat="1 0 0 0"/>
+          <body name="Left_Leg_Hip_Yaw" pos="0 0 -0.08" quat="1 0 0 0">
+            <joint name="Left_Leg_Hip_Yaw" type="hinge" axis="0 0 1" range="-1.5708 1.5708" limited="true"/>
+            <inertial pos="0.00446 0 -0.14274" mass="6.12376" fullinertia="0.05072 0.05217 0.01075 3.42e-09 -3.322e-08 0.001587"/>
+            <geom name="geom_Left_Leg_Hip_Yaw" type="mesh" mesh="Left_Leg_Hip_Yaw" pos="0 0 0" quat="1 0 0 0"/>
+            <body name="Left_Leg_Knee" pos="0 0 -0.325" quat="1 0 0 0">
+              <joint name="Left_Leg_Knee" type="hinge" axis="0 1 0" range="0 2.3562" limited="true"/>
+              <inertial pos="0.00914 0 -0.16101" mass="3.25952" fullinertia="0.04713 0.04809 0.00263 -1.569e-14 0 -0.002143"/>
+              <geom name="geom_Left_Leg_Knee" type="mesh" mesh="Left_Leg_Knee" pos="0 0 0" quat="1 0 0 0"/>
+              <body name="Left_Leg_Ankle_Pitch" pos="0 0 -0.405" quat="1 0 0 0">
+                <joint name="Left_Leg_Ankle_Pitch" type="hinge" axis="0 1 0" range="-0.7854 1.5708" limited="true"/>
+                <inertial pos="-7.75e-13 0 0" mass="0.03122" fullinertia="4.02186e-06 2.38737e-06 4.77497e-06 -5.373e-18 0 0"/>
+                <geom name="geom_Left_Leg_Ankle_Pitch" type="mesh" mesh="Left_Leg_Ankle_Pitch" pos="0 0 0" quat="1 0 0 0"/>
+                <body name="Left_Leg_Ankle_Roll_Foot" pos="0 0 0" quat="1 0 0 0">
+                  <joint name="Left_Leg_Ankle_Roll" type="hinge" axis="1 0 0" range="-0.5236 0.5236" limited="true"/>
+                  <inertial pos="0.02658 0 -0.03251" mass="0.24502" fullinertia="0.000134 0.0004053 0.0005052 0 0 1.61992e-05"/>
+                  <geom name="geom_Left_Leg_Ankle_Roll_Foot" type="mesh" mesh="Left_Leg_Ankle_Roll_Foot" pos="0 0 0" quat="1 0 0 0"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+      <body name="Right_Leg_Hip_Pitch" pos="0 -0.024 -0.11" quat="1 0 0 0">
+        <joint name="Right_Leg_Hip_Pitch" type="hinge" axis="0 1 0" range="-1.5708 1.5708" limited="true"/>
+        <inertial pos="0 -0.04281 0" mass="0.6373" fullinertia="0.001598 0.001645 0.001926 -1.724e-15 7.105e-18 -1.591e-18"/>
+        <geom name="geom_Right_Leg_Hip_Pitch" type="mesh" mesh="Right_Leg_Hip_Pitch" pos="0 0 0" quat="1 0 0 0"/>
+        <body name="Right_Leg_Hip_Roll" pos="0 -0.08 0" quat="1 0 0 0">
+          <joint name="Right_Leg_Hip_Roll" type="hinge" axis="1 0 0" range="-1.5708 0.5236" limited="true"/>
+          <inertial pos="0 0 -0.01776" mass="1.70209" fullinertia="0.003254 0.002922 0.001992 -7.853e-16 0 1.686e-15"/>
+          <geom name="geom_Right_Leg_Hip_Roll" type="mesh" mesh="Right_Leg_Hip_Roll" pos="0 0 0" quat="1 0 0 0"/>
+          <body name="Right_Leg_Hip_Yaw" pos="0 0 -0.08" quat="1 0 0 0">
+            <joint name="Right_Leg_Hip_Yaw" type="hinge" axis="0 0 1" range="-1.5708 1.5708" limited="true"/>
+            <inertial pos="0.00446 0 -0.14274" mass="6.12376" fullinertia="0.05072 0.05217 0.01075 3.42e-09 -3.322e-08 0.001587"/>
+            <geom name="geom_Right_Leg_Hip_Yaw" type="mesh" mesh="Right_Leg_Hip_Yaw" pos="0 0 0" quat="1 0 0 0"/>
+            <body name="Right_Leg_Knee" pos="0 0 -0.325" quat="1 0 0 0">
+              <joint name="Right_Leg_Knee" type="hinge" axis="0 1 0" range="0 2.3562" limited="true"/>
+              <inertial pos="0.00914 0 -0.16101" mass="3.25952" fullinertia="0.04713 0.04809 0.00263 -1.569e-14 0 -0.002143"/>
+              <geom name="geom_Right_Leg_Knee" type="mesh" mesh="Right_Leg_Knee" pos="0 0 0" quat="1 0 0 0"/>
+              <body name="Right_Leg_Ankle_Pitch" pos="0 0 -0.405" quat="1 0 0 0">
+                <joint name="Right_Leg_Ankle_Pitch" type="hinge" axis="0 1 0" range="-0.7854 1.5708" limited="true"/>
+                <inertial pos="-7.749e-13 0 0" mass="0.03122" fullinertia="4.02186e-06 2.38737e-06 4.77497e-06 -5.373e-18 0 0"/>
+                <geom name="geom_Right_Leg_Ankle_Pitch" type="mesh" mesh="Right_Leg_Ankle_Pitch" pos="0 0 0" quat="1 0 0 0"/>
+                <body name="Right_Leg_Ankle_Roll_Foot" pos="0 0 0" quat="1 0 0 0">
+                  <joint name="Right_Leg_Ankle_Roll" type="hinge" axis="1 0 0" range="-0.5236 0.5236" limited="true"/>
+                  <inertial pos="0.02658 0 -0.03251" mass="0.24502" fullinertia="0.000134 0.0004053 0.0005052 0 0 1.61992e-05"/>
+                  <geom name="geom_Right_Leg_Ankle_Roll_Foot" type="mesh" mesh="Right_Leg_Ankle_Roll_Foot" pos="0 0 0" quat="1 0 0 0"/>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <motor name="motor_Waist_Pitch" joint="Waist_Pitch" gear="150"/>
+    <motor name="motor_Waist_Roll" joint="Waist_Roll" gear="150"/>
+    <motor name="motor_Waist_Yaw" joint="Waist_Yaw" gear="150"/>
+    <motor name="motor_Left_Arm_Shoulder_Pitch" joint="Left_Arm_Shoulder_Pitch" gear="150"/>
+    <motor name="motor_Left_Arm_Shoulder_Roll" joint="Left_Arm_Shoulder_Roll" gear="150"/>
+    <motor name="motor_Left_Arm_Shoulder_Yaw" joint="Left_Arm_Shoulder_Yaw" gear="150"/>
+    <motor name="motor_Left_Arm_Elbow" joint="Left_Arm_Elbow" gear="150"/>
+    <motor name="motor_Left_Arm_Wrist_Yaw" joint="Left_Arm_Wrist_Yaw" gear="150"/>
+    <motor name="motor_Left_Arm_Wrist_Pitch" joint="Left_Arm_Wrist_Pitch" gear="150"/>
+    <motor name="motor_Left_Arm_Wrist_Roll" joint="Left_Arm_Wrist_Roll" gear="150"/>
+    <motor name="motor_Right_Arm_Shoulder_Pitch" joint="Right_Arm_Shoulder_Pitch" gear="150"/>
+    <motor name="motor_Right_Arm_Shoulder_Roll" joint="Right_Arm_Shoulder_Roll" gear="150"/>
+    <motor name="motor_Right_Arm_Shoulder_Yaw" joint="Right_Arm_Shoulder_Yaw" gear="150"/>
+    <motor name="motor_Right_Arm_Elbow" joint="Right_Arm_Elbow" gear="150"/>
+    <motor name="motor_Right_Arm_Wrist_Yaw" joint="Right_Arm_Wrist_Yaw" gear="150"/>
+    <motor name="motor_Right_Arm_Wrist_Pitch" joint="Right_Arm_Wrist_Pitch" gear="150"/>
+    <motor name="motor_Right_Arm_Wrist_Roll" joint="Right_Arm_Wrist_Roll" gear="150"/>
+    <motor name="motor_Left_Leg_Hip_Pitch" joint="Left_Leg_Hip_Pitch" gear="150"/>
+    <motor name="motor_Left_Leg_Hip_Roll" joint="Left_Leg_Hip_Roll" gear="150"/>
+    <motor name="motor_Left_Leg_Hip_Yaw" joint="Left_Leg_Hip_Yaw" gear="150"/>
+    <motor name="motor_Left_Leg_Knee" joint="Left_Leg_Knee" gear="150"/>
+    <motor name="motor_Left_Leg_Ankle_Pitch" joint="Left_Leg_Ankle_Pitch" gear="150"/>
+    <motor name="motor_Left_Leg_Ankle_Roll" joint="Left_Leg_Ankle_Roll" gear="150"/>
+    <motor name="motor_Right_Leg_Hip_Pitch" joint="Right_Leg_Hip_Pitch" gear="150"/>
+    <motor name="motor_Right_Leg_Hip_Roll" joint="Right_Leg_Hip_Roll" gear="150"/>
+    <motor name="motor_Right_Leg_Hip_Yaw" joint="Right_Leg_Hip_Yaw" gear="150"/>
+    <motor name="motor_Right_Leg_Knee" joint="Right_Leg_Knee" gear="150"/>
+    <motor name="motor_Right_Leg_Ankle_Pitch" joint="Right_Leg_Ankle_Pitch" gear="150"/>
+    <motor name="motor_Right_Leg_Ankle_Roll" joint="Right_Leg_Ankle_Roll" gear="150"/>
+  </actuator>
+</mujoco>

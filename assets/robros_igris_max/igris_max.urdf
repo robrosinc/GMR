@@ -1,0 +1,680 @@
+<?xml version="1.0"?>
+
+<robot name="170_65">
+
+<!--Link_Origin-->
+    <link name="Pelvis">
+        <inertial>
+			<origin xyz="0.0000000000005609 0 -0.04843" rpy="0 0 0"/>
+			<mass value="11.00016"/>
+			<inertia ixx="0.0513" iyy="0.04601" izz="0.0239" ixy="-1.397E-17" iyz="-2.205E-17" ixz="0"/>
+		</inertial>
+
+        <visual>
+			<origin xyz="0 0 0" rpy="0 0 0"/>
+			<geometry>
+				<mesh filename="meshes/Pelvis.stl"/>
+			</geometry>
+			<material name="random">
+				<color rgba="1.0 0.0 0.0 1.0"/>
+			</material>
+		</visual>
+    </link>
+
+<!--Link_Body-->
+    <link name="Waist_Yaw_Torso">
+		<inertial>
+			<!-- <origin xyz="-0.01006 0 0.34175" rpy="0 0 0"/> -->
+			<origin xyz="-0.01006 0 0.16575" rpy="0 0 0"/>
+			<mass value="14.35832"/>
+			<inertia ixx="0.2033" iyy="0.1673" izz="0.1257" ixy="0.00000002298" iyz="-0.00000025353" ixz="0.006583"/>
+		</inertial> 
+
+        <visual>
+			<!-- <origin xyz="0 0 0.176" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Waist_Yaw_Torso.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Waist_Pitch">
+		<inertial>
+			<!-- <origin xyz="-0.000000000005382 -0.0000000000006466 0.055" rpy="0 0 0"/> -->
+			<origin xyz="-0.000000000005382 -0.0000000000006466 0" rpy="0 0 0"/>
+			<mass value="0.32641"/>
+			<inertia ixx="0.0003569" iyy="0.0001834" izz="0.0003969" ixy="-3.648E-16" iyz="0" ixz="4.019E-19"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 0 0.055" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="./meshes/Waist_Pitch.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Waist_Roll">
+		<inertial>
+			<!-- <origin xyz="0 -0.0000000000001915 0.14432" rpy="0 0 0"/> -->
+			<origin xyz="0 -0.0000000000001915 0.08932" rpy="0 0 0"/>
+			<mass value="0.40874"/>
+			<inertia ixx="0.001759" iyy="0.001113" izz="0.001818" ixy="6.445E-18" iyz="-0.000000000000006999" ixz="-5.803E-16"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 0 0.055" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Waist_Roll.stl"/>
+			</geometry>
+		</visual>
+    </link>
+
+<!--Link_Left_Arm--> 
+    <link name="Left_Arm_Shoulder_Pitch">
+        <inertial>
+			<!-- <origin xyz="0.000000000000173 0.1665 0.4" rpy="0 0 0"/> -->
+			<origin xyz="0.000000000000173 0.0315 0" rpy="0 0 0"/>
+			<mass value="0.60301"/>
+			<inertia ixx="0.0008978" iyy="0.001501" izz="0.001625" ixy="0.000000000000003268" iyz="0" ixz="-3.326E-19"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 0.135 0.4" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Left_Arm_Shoulder_Pitch.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Left_Arm_Shoulder_Roll">
+        <inertial>
+			<!-- <origin xyz="-0.00000000000125 0.19 0.39269" rpy="0 0 0"/> -->
+			<origin xyz="-0.00000000000125 0 -0.00731" rpy="0 0 0"/>
+			<mass value="1.65688"/>
+			<inertia ixx="0.002065" iyy="0.002235" izz="0.001843" ixy="-5.869E-16" iyz="-0.00000000116" ixz="-0.00000000000008747"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 0.19 0.4" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Left_Arm_Shoulder_Roll.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Left_Arm_Shoulder_Yaw">
+        <inertial>
+			<!-- <origin xyz="-0.000000000005427 0.19 0.26557" rpy="0 0 0"/> -->
+			<origin xyz="-0.000000000005427 0 -0.07443" rpy="0 0 0"/>
+			<mass value="1.79785"/>
+			<inertia ixx="0.004697" iyy="0.004775" izz="0.00139" ixy="3.833E-19" iyz="1.137E-17" ixz="0"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 0.19 0.34" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Left_Arm_Shoulder_Yaw.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Left_Arm_Elbow">
+        <inertial>
+			<!-- <origin xyz="0.00000006029 0.19 0.15424" rpy="0 0 0"/> -->
+			<origin xyz="0.00000006029 0 -0.00575999999999999" rpy="0 0 0"/>
+			<mass value="0.65503"/>
+			<inertia ixx="0.0006114" iyy="0.0006478" izz="0.0004939" ixy="0.00000000057" iyz="-5.627E-16" ixz="0.00000000108"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 0.19 0.16" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Left_Arm_Elbow.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Left_Arm_Wrist_Yaw">
+        <inertial>
+			<!-- <origin xyz="0 0.19 -0.01416" rpy="0 0 0"/> -->
+			<origin xyz="0 0 -0.12416" rpy="0 0 0"/>
+			<mass value="1.75208"/>
+			<inertia ixx="0.0096" iyy="0.009574" izz="0.000802" ixy="1.406E-18" iyz="2.132E-18" ixz="-0.00000011258"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 0.19 0.11" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Left_Arm_Wrist_Yaw.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Left_Arm_Wrist_Pitch">
+        <inertial>
+			<!-- <origin xyz="0 0.19 -0.1591" rpy="0 0 0"/> -->
+			<origin xyz="0 0 0.000900000000000006" rpy="0 0 0"/>
+			<mass value="0.1259"/>
+			<inertia ixx="0.00003992203" iyy="0.00003410252" izz="0.0000366122" ixy="1.139E-16" iyz="5.969E-17" ixz="0"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 0.19 -0.16" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Left_Arm_Wrist_Pitch.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Left_Arm_Wrist_Roll">
+        <inertial>
+			<!-- <origin xyz="0 0.19 -0.24525" rpy="0 0 0"/> -->
+			<origin xyz="0 0 -0.08525" rpy="0 0 0"/>
+			<mass value="0.90889"/>
+			<inertia ixx="0.001234" iyy="0.002075" izz="0.0009758" ixy="0.000000000000000626" iyz="5.684E-18" ixz="5.364E-18"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 0.19 -0.16" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Left_Arm_Wrist_Roll.stl"/>
+			</geometry>
+		</visual>
+    </link>
+
+<!--Link_Right_Arm-->
+    <link name="Right_Arm_Shoulder_Pitch">
+        <inertial>
+			<!-- <origin xyz="-0.0000000000001765 -0.1665 0.4" rpy="0 0 0"/> -->
+			<origin xyz="-0.0000000000001765 -0.0315 0" rpy="0 0 0"/>
+			<mass value="0.60301"/>
+			<inertia ixx="0.0008978" iyy="0.001501" izz="0.001625" ixy="0.000000000000003267" iyz="0" ixz="-3.514E-19"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 -0.135 0.4" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Right_Arm_Shoulder_Pitch.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Right_Arm_Shoulder_Roll">
+        <inertial>
+			<!-- <origin xyz="-0.00000000000125 -0.19 0.39269" rpy="0 0 0"/> -->
+			<origin xyz="-0.00000000000125 0 -0.00731" rpy="0 0 0"/>
+			<mass value="1.65688"/>
+			<inertia ixx="0.002065" iyy="0.002235" izz="0.001843" ixy="-5.869E-16" iyz="-0.00000000116" ixz="-0.00000000000008747"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 -0.19 0.4" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Right_Arm_Shoulder_Roll.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Right_Arm_Shoulder_Yaw">
+        <inertial>
+			<!-- <origin xyz="-0.000000000005427 -0.19 0.26557" rpy="0 0 0"/> -->
+			<origin xyz="-0.000000000005427 0 -0.07443" rpy="0 0 0"/>
+			<mass value="1.79785"/>
+			<inertia ixx="0.004697" iyy="0.004775" izz="0.00139" ixy="3.583E-19" iyz="1.137E-17" ixz="0"/>
+		</inertial>
+        
+        <visual>
+			<!-- <origin xyz="0 -0.19 0.34" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Right_Arm_Shoulder_Yaw.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Right_Arm_Elbow">
+        <inertial>
+			<!-- <origin xyz="0.00000006029 -0.19 0.15424" rpy="0 0 0"/> -->
+			<origin xyz="0.00000006029 0 -0.00575999999999999" rpy="0 0 0"/>
+			<mass value="0.65503"/>
+			<inertia ixx="0.0006114" iyy="0.0006478" izz="0.0004939" ixy="0.00000000057" iyz="-5.627E-16" ixz="0.00000000108"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 -0.19 0.16" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Right_Arm_Elbow.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Right_Arm_Wrist_Yaw">
+        <inertial>
+			<!-- <origin xyz="0 -0.19 -0.01416" rpy="0 0 0"/> -->
+			<origin xyz="0 0 -0.12416" rpy="0 0 0"/>
+			<mass value="1.75208"/>
+			<inertia ixx="0.0096" iyy="0.009574" izz="0.000802" ixy="1.342E-18" iyz="0.00000000096" ixz="-0.00000011258"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 -0.19 0.11" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Right_Arm_Wrist_Yaw.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Right_Arm_Wrist_Pitch">
+        <inertial>
+			<!-- <origin xyz="0 -0.19 -0.1591" rpy="0 0 0"/> -->
+			<origin xyz="0 0 0.000900000000000006" rpy="0 0 0"/>
+			<mass value="0.1259"/>
+			<inertia ixx="0.00003992203" iyy="0.00003410252" izz="0.0000366122" ixy="1.139E-16" iyz="5.969E-17" ixz="0"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 -0.19 -0.16" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Right_Arm_Wrist_Pitch.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Right_Arm_Wrist_Roll">
+        <inertial>
+			<!-- <origin xyz="0 -0.19 -0.24525" rpy="0 0 0"/> -->
+			<origin xyz="0 0 -0.08525" rpy="0 0 0"/>
+			<mass value="0.90889"/>
+			<inertia ixx="0.001234" iyy="0.002075" izz="0.0009758" ixy="6.254E-16" iyz="0" ixz="5.447E-19"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 -0.19 -0.16" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Right_Arm_Wrist_Roll.stl"/>
+			</geometry>
+		</visual>
+    </link>
+
+<!--Link_Left_Leg-->
+    <link name="Left_Leg_Hip_Pitch">
+        <inertial>
+			<!-- <origin xyz="0 0.06681 -0.11" rpy="0 0 0"/> -->
+			<origin xyz="0 0.04281 0" rpy="0 0 0"/>
+			<mass value="0.6373"/>
+			<inertia ixx="0.001598" iyy="0.001645" izz="0.001926" ixy="-0.000000000000001721" iyz="0" ixz="2.648E-18"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 0.024 -0.11" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Left_Leg_Hip_Pitch.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Left_Leg_Hip_Roll">
+        <inertial>
+			<!-- <origin xyz="0 0.104 -0.12776" rpy="0 0 0"/> -->
+			<origin xyz="0 0 -0.01776" rpy="0 0 0"/>
+			<mass value="1.70209"/>
+			<inertia ixx="0.003254" iyy="0.002922" izz="0.001992" ixy="-7.853E-16" iyz="0" ixz="0.000000000000001686"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 0.104 -0.11" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Left_Leg_Hip_Roll.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Left_Leg_Hip_Yaw">
+        <inertial>
+			<!-- <origin xyz="0.00446 0.104 -0.33274" rpy="0 0 0"/> -->
+			<origin xyz="0.00446 0 -0.14274" rpy="0 0 0"/>
+			<mass value="6.12376"/>
+			<inertia ixx="0.05072" iyy="0.05217" izz="0.01075" ixy="0.00000000342" iyz="-0.00000003322" ixz="0.001587"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 0.104 -0.19" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Left_Leg_Hip_Yaw.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Left_Leg_Knee">
+        <inertial>
+			<!-- <origin xyz="0.00914 0.104 -0.67601" rpy="0 0 0"/> -->
+			<origin xyz="0.00914 0 -0.16101" rpy="0 0 0"/>
+			<mass value="3.25952"/>
+			<inertia ixx="0.04713" iyy="0.04809" izz="0.00263" ixy="-0.00000000000001569" iyz="0" ixz="-0.002143"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 0.104 -0.515" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Left_Leg_Knee.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Left_Leg_Ankle_Pitch">
+        <inertial>
+			<!-- <origin xyz="-0.000000000000775 0.104 -0.92" rpy="0 0 0"/> -->
+			<origin xyz="-0.000000000000775 0 0" rpy="0 0 0"/>
+			<mass value="0.03122"/>
+			<inertia ixx="0.00000402186" iyy="0.00000238737" izz="0.00000477497" ixy="-5.373E-18" iyz="0" ixz="0"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 0.104 -0.92" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Left_Leg_Ankle_Pitch.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Left_Leg_Ankle_Roll_Foot">
+        <inertial>
+			<!-- <origin xyz="0.02658 0.104 -0.95251" rpy="0 0 0"/> -->
+			<origin xyz="0.02658 0 -0.03251" rpy="0 0 0"/>
+			<mass value="0.24502"/>
+			<inertia ixx="0.000134" iyy="0.0004053" izz="0.0005052" ixy="0" iyz="0" ixz="0.00001619925"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 0.104 -0.92" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Left_Leg_Ankle_Roll_Foot.stl"/>
+			</geometry>
+		</visual>
+    </link>
+
+<!--Link_Right_Leg-->
+    <link name="Right_Leg_Hip_Pitch">
+        <inertial>
+			<!-- <origin xyz="0 -0.06681 -0.11" rpy="0 0 0"/> -->
+			<origin xyz="0 -0.04281 0" rpy="0 0 0"/>
+			<mass value="0.6373"/>
+			<inertia ixx="0.001598" iyy="0.001645" izz="0.001926" ixy="-0.000000000000001724" iyz="7.105E-18" ixz="-1.591E-18"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 -0.024 -0.11" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Right_Leg_Hip_Pitch.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Right_Leg_Hip_Roll">
+        <inertial>
+			<!-- <origin xyz="0 -0.104 -0.12776" rpy="0 0 0"/> -->
+			<origin xyz="0 0 -0.01776" rpy="0 0 0"/>
+			<mass value="1.70209"/>
+			<inertia ixx="0.003254" iyy="0.002922" izz="0.001992" ixy="-7.853E-16" iyz="0" ixz="0.000000000000001686"/>
+		</inertial>
+        
+        <visual>
+			<!-- <origin xyz="0 -0.104 -0.11" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Right_Leg_Hip_Roll.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Right_Leg_Hip_Yaw">
+        <inertial>
+			<!-- <origin xyz="0.00446 -0.104 -0.33274" rpy="0 0 0"/> -->
+			<origin xyz="0.00446 0 -0.14274" rpy="0 0 0"/>
+			<mass value="6.12376"/>
+			<inertia ixx="0.05072" iyy="0.05217" izz="0.01075" ixy="0.00000000342" iyz="-0.00000003322" ixz="0.001587"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 -0.104 -0.19" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Right_Leg_Hip_Yaw.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Right_Leg_Knee">
+        <inertial>
+			<!-- <origin xyz="0.00914 -0.104 -0.67601" rpy="0 0 0"/> -->
+			<origin xyz="0.00914 0 -0.16101" rpy="0 0 0"/>
+			<mass value="3.25952"/>
+			<inertia ixx="0.04713" iyy="0.04809" izz="0.00263" ixy="-0.00000000000001569" iyz="0" ixz="-0.002143"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 -0.104 -0.515" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Right_Leg_Knee.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Right_Leg_Ankle_Pitch">
+        <inertial>
+			<!-- <origin xyz="-0.0000000000007749 -0.104 -0.92" rpy="0 0 0"/> -->
+			<origin xyz="-0.0000000000007749 0 0" rpy="0 0 0"/>
+			<mass value="0.03122"/>
+			<inertia ixx="0.00000402186" iyy="0.00000238737" izz="0.00000477497" ixy="-5.373E-18" iyz="0" ixz="0"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 -0.104 -0.92" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Right_Leg_Ankle_Pitch.stl"/>
+			</geometry>
+		</visual>
+    </link>
+    <link name="Right_Leg_Ankle_Roll_Foot">
+        <inertial>
+			<!-- <origin xyz="0.02658 -0.104 -0.95251" rpy="0 0 0"/> -->
+			<origin xyz="0.02658 0 -0.03251" rpy="0 0 0"/>
+			<mass value="0.24502"/>
+			<inertia ixx="0.000134" iyy="0.0004053" izz="0.0005052" ixy="0" iyz="0" ixz="0.00001619925"/>
+		</inertial>
+
+        <visual>
+			<!-- <origin xyz="0 -0.104 -0.92" rpy="0 0 0"/> -->
+			<geometry>
+				<mesh filename="meshes/Right_Leg_Ankle_Roll_Foot.stl"/>
+			</geometry>
+		</visual>
+    </link>
+
+<!--Joint_Body-->
+    <joint name="Waist_Pitch" type="revolute">
+        <parent link="Pelvis"/>
+        <child link="Waist_Pitch"/>
+        <axis xyz="0.0 1.0 0.0"/>
+		<origin xyz="0 0 0.055" rpy="0 0 0"/>
+		<limit lower="-0.5236" upper="0.7854" effort="0.0" velocity="0.0"/>
+    </joint>
+    <joint name="Waist_Roll" type="revolute">
+        <parent link="Waist_Pitch"/>
+        <child link="Waist_Roll"/>
+        <axis xyz="1.0 0.0 0.0"/>
+		<limit lower="-0.5236" upper="0.5236" effort="0.0" velocity="0.0"/>
+    </joint>
+    <joint name="Waist_Yaw" type="revolute">
+        <parent link="Waist_Roll"/>
+        <child link="Waist_Yaw_Torso"/>
+        <axis xyz="0.0 0.0 1.0"/>
+		<origin xyz="0 0 0.121" rpy="0 0 0"/>
+		<limit lower="-0.7854" upper="0.7854" effort="0.0" velocity="0.0"/>
+    </joint>
+
+<!--Joint_Left_Arm-->
+    <joint name="Left_Arm_Shoulder_Pitch" type="revolute">
+		<!-- <origin xyz="0.0 0.135 0.4"/> -->
+        <parent link="Waist_Yaw_Torso"/>
+        <child link="Left_Arm_Shoulder_Pitch"/>
+        <axis xyz="0.0 1.0 0.0"/>
+		<origin xyz="0 0.135 0.279" rpy="0 0 0"/>
+		<limit lower="-3.14" upper="3.14" effort="1.0" velocity="1.0"/>
+    </joint>
+    <joint name="Left_Arm_Shoulder_Roll" type="revolute">
+        <parent link="Left_Arm_Shoulder_Pitch"/>
+        <child link="Left_Arm_Shoulder_Roll"/>
+        <axis xyz="1.0 0.0 0.0"/>
+		<origin xyz="0 0.055 0.0" rpy="0 0 0"/>
+		<limit lower="-0.56" upper="3.14" effort="0.0" velocity="0.0"/>
+    </joint>
+    <joint name="Left_Arm_Shoulder_Yaw" type="revolute">
+        <parent link="Left_Arm_Shoulder_Roll"/>
+        <child link="Left_Arm_Shoulder_Yaw"/>
+        <axis xyz="0.0 0.0 1.0"/>
+		<origin xyz="0 0 -0.06" rpy="0 0 0"/>
+		<limit lower="-3.14" upper="3.14" effort="0.0" velocity="0.0"/>
+    </joint>
+    <joint name="Left_Arm_Elbow" type="revolute">
+        <parent link="Left_Arm_Shoulder_Yaw"/>
+        <child link="Left_Arm_Elbow"/>
+        <axis xyz="0.0 1.0 0.0"/>
+		<origin xyz="0.0 0.0 -0.18" rpy="0.0 0.0 0.0"/>
+		<limit lower="-2.3562" upper="0.0" effort="0.0" velocity="0.0"/>
+    </joint>
+	<joint name="Left_Arm_Wrist_Yaw" type="revolute">
+		<parent link="Left_Arm_Elbow"/>
+		<child link="Left_Arm_Wrist_Yaw"/>
+		<axis xyz="0.0 0.0 1.0"/>
+		<origin xyz="0 0 -0.05" rpy="0 0 0"/>
+		<limit lower="-3.14" upper="3.14" effort="0.0" velocity="0.0"/>
+	</joint>
+	<joint name="Left_Arm_Wrist_Pitch" type="revolute">
+		<parent link="Left_Arm_Wrist_Yaw"/>
+		<child link="Left_Arm_Wrist_Pitch"/>
+		<axis xyz="0.0 1.0 0.0"/>
+		<origin xyz="0.0 0.0 -0.27" rpy="0.0 0.0 0.0"/>
+		<limit lower="-0.5236" upper="0.5236" effort="0.0" velocity="0.0"/>
+	</joint>
+	<joint name="Left_Arm_Wrist_Roll" type="revolute">
+		<parent link="Left_Arm_Wrist_Pitch"/>
+		<child link="Left_Arm_Wrist_Roll"/>
+		<axis xyz="1.0 0.0 0.0"/>
+		<origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+		<limit lower="-0.7854" upper="0.7854" effort="0.0" velocity="0.0"/>
+	</joint>
+<!--Joint_Right_Arm-->
+    <joint name="Right_Arm_Shoulder_Pitch" type="revolute">
+        <parent link="Waist_Yaw_Torso"/>
+        <child link="Right_Arm_Shoulder_Pitch"/>
+        <axis xyz="0.0 1.0 0.0"/>
+		<origin xyz="0.0 -0.135 0.279" rpy="0.0 0.0 0.0"/>
+		<limit lower="-3.14" upper="3.14" effort="1.0" velocity="1.0"/>
+    </joint>
+    <joint name="Right_Arm_Shoulder_Roll" type="revolute">
+        <parent link="Right_Arm_Shoulder_Pitch"/>
+        <child link="Right_Arm_Shoulder_Roll"/>
+        <axis xyz="1.0 0.0 0.0"/>
+		<origin xyz="0 -0.055 0.0" rpy="0 0 0"/>
+		<limit lower="-3.14" upper="0.56" effort="0.0" velocity="0.0"/>
+    </joint>
+    <joint name="Right_Arm_Shoulder_Yaw" type="revolute">
+        <parent link="Right_Arm_Shoulder_Roll"/>
+        <child link="Right_Arm_Shoulder_Yaw"/>
+        <axis xyz="0.0 0.0 1.0"/>
+		<origin xyz="0 0 -0.06" rpy="0 0 0"/>
+		<limit lower="-3.14" upper="3.14" effort="0.0" velocity="0.0"/>
+    </joint>
+    <joint name="Right_Arm_Elbow" type="revolute">
+        <parent link="Right_Arm_Shoulder_Yaw"/>
+        <child link="Right_Arm_Elbow"/>
+        <axis xyz="0.0 1.0 0.0"/>
+		<origin xyz="0.0 0.0 -0.18" rpy="0.0 0.0 0.0"/>
+		<limit lower="-2.3562" upper="0.0" effort="0.0" velocity="0.0"/>
+    </joint>
+	<joint name="Right_Arm_Wrist_Yaw" type="revolute">
+		<parent link="Right_Arm_Elbow"/>
+		<child link="Right_Arm_Wrist_Yaw"/>
+		<axis xyz="0.0 0.0 1.0"/>
+		<origin xyz="0 0 -0.05" rpy="0 0 0"/>
+		<limit lower="-3.14" upper="3.14" effort="0.0" velocity="0.0"/>
+	</joint>
+	<joint name="Right_Arm_Wrist_Pitch" type="revolute">
+		<parent link="Right_Arm_Wrist_Yaw"/>
+		<child link="Right_Arm_Wrist_Pitch"/>
+		<axis xyz="0.0 1.0 0.0"/>
+		<origin xyz="0.0 0.0 -0.27" rpy="0.0 0.0 0.0"/>
+		<limit lower="-0.5236" upper="0.5236" effort="0.0" velocity="0.0"/>
+	</joint>
+	<joint name="Right_Arm_Wrist_Roll" type="revolute">
+		<parent link="Right_Arm_Wrist_Pitch"/>
+		<child link="Right_Arm_Wrist_Roll"/>
+		<axis xyz="1.0 0.0 0.0"/>
+		<origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+		<limit lower="-0.7854" upper="0.7854" effort="0.0" velocity="0.0"/>
+	</joint>
+
+<!--Joint_Left_Leg-->
+	<joint name="Left_Leg_Hip_Pitch" type="revolute">
+		<parent link="Pelvis"/>
+		<child link="Left_Leg_Hip_Pitch"/>
+		<axis xyz="0.0 1.0 0.0"/>
+		<origin xyz="0 0.024 -0.11" rpy="0 0 0"/>
+		<limit lower="-1.5708" upper="1.5708" effort="0.0" velocity="0.0"/>
+	</joint>
+	<joint name="Left_Leg_Hip_Roll" type="revolute">
+		<parent link="Left_Leg_Hip_Pitch"/>
+		<child link="Left_Leg_Hip_Roll"/>
+		<axis xyz="1.0 0.0 0.0"/>
+		<origin xyz="0 0.08 0" rpy="0 0 0"/>
+		<limit lower="-0.5236" upper="1.5708" effort="0.0" velocity="0.0"/>
+	</joint>
+	<joint name="Left_Leg_Hip_Yaw" type="revolute">
+		<parent link="Left_Leg_Hip_Roll"/>
+		<child link="Left_Leg_Hip_Yaw"/>
+		<axis xyz="0.0 0.0 1.0"/>
+		<origin xyz="0 0 -0.08" rpy="0 0 0"/>
+		<limit lower="-1.5708" upper="1.5708" effort="0.0" velocity="0.0"/>
+	</joint>
+	<joint name="Left_Leg_Knee" type="revolute">
+		<parent link="Left_Leg_Hip_Yaw"/>
+		<child link="Left_Leg_Knee"/>
+		<axis xyz="0.0 1.0 0.0"/>
+		<origin xyz="0.0 0.0 -0.325" rpy="0.0 0.0 0.0"/>
+		<limit lower="0.0" upper="2.3562" effort="0.0" velocity="0.0"/>
+	</joint>
+	<joint name="Left_Leg_Ankle_Pitch" type="revolute">
+		<parent link="Left_Leg_Knee"/>
+		<child link="Left_Leg_Ankle_Pitch"/>
+		<axis xyz="0.0 1.0 0.0"/>
+		<origin xyz="0.0 0.0 -0.405" rpy="0.0 0.0 0.0"/>
+		<limit lower="-0.7854" upper="1.5708" effort="0.0" velocity="0.0"/>
+	</joint>
+	<joint name="Left_Leg_Ankle_Roll" type="revolute">
+		<parent link="Left_Leg_Ankle_Pitch"/>
+		<child link="Left_Leg_Ankle_Roll_Foot"/>
+		<axis xyz="1.0 0.0 0.0"/>
+		<origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+		<limit lower="-0.5236" upper="0.5236" effort="0.0" velocity="0.0"/>
+	</joint>
+
+<!--Joint_Right_Leg-->
+	<joint name="Right_Leg_Hip_Pitch" type="revolute">
+		<parent link="Pelvis"/>
+		<child link="Right_Leg_Hip_Pitch"/>
+		<axis xyz="0.0 1.0 0.0"/>
+		<origin xyz="0 -0.024 -0.11" rpy="0 0 0"/>
+		<limit lower="-1.5708" upper="1.5708" effort="0.0" velocity="0.0"/>
+	</joint>
+	<joint name="Right_Leg_Hip_Roll" type="revolute">
+		<parent link="Right_Leg_Hip_Pitch"/>
+		<child link="Right_Leg_Hip_Roll"/>
+		<axis xyz="1.0 0.0 0.0"/>
+		<origin xyz="0 -0.08 0" rpy="0 0 0"/>
+		<limit lower="-1.5708" upper="0.5236" effort="0.0" velocity="0.0"/>
+	</joint>
+	<joint name="Right_Leg_Hip_Yaw" type="revolute">
+		<parent link="Right_Leg_Hip_Roll"/>
+		<child link="Right_Leg_Hip_Yaw"/>
+		<axis xyz="0.0 0.0 1.0"/>
+		<origin xyz="0 0 -0.08" rpy="0 0 0"/>
+		<limit lower="-1.5708" upper="1.5708" effort="0.0" velocity="0.0"/>
+	</joint>
+	<joint name="Right_Leg_Knee" type="revolute">
+		<parent link="Right_Leg_Hip_Yaw"/>
+		<child link="Right_Leg_Knee"/>
+		<axis xyz="0.0 1.0 0.0"/>
+		<origin xyz="0.0 0.0 -0.325" rpy="0.0 0.0 0.0"/>
+		<limit lower="0.0" upper="2.3562" effort="0.0" velocity="0.0"/>
+	</joint>
+	<joint name="Right_Leg_Ankle_Pitch" type="revolute">
+		<parent link="Right_Leg_Knee"/>
+		<child link="Right_Leg_Ankle_Pitch"/>
+		<axis xyz="0.0 1.0 0.0"/>
+		<origin xyz="0.0 0.0 -0.405" rpy="0.0 0.0 0.0"/>
+		<limit lower="-0.7854" upper="1.5708" effort="0.0" velocity="0.0"/>
+	</joint>
+	<joint name="Right_Leg_Ankle_Roll" type="revolute">
+		<parent link="Right_Leg_Ankle_Pitch"/>
+		<child link="Right_Leg_Ankle_Roll_Foot"/>
+		<axis xyz="1.0 0.0 0.0"/>
+		<origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0"/>
+		<limit lower="-0.5236" upper="0.5236" effort="0.0" velocity="0.0"/>
+	</joint>
+</robot>
