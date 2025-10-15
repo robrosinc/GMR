@@ -1,9 +1,9 @@
-# # robros igris_c
-# python scripts/smplx_to_robot.py \
-# --robot robros_igris_c_v2 \
-# --smplx_file /home/robros/workspace/GMR/data/ACCAD/Male1General_c3d/General_A5_-_Pick_Up_Box_stageii.npz \
-# --record_video \
-# --save_path output/pickup.pkl
+# robros igris_c
+python scripts/smplx_to_robot.py \
+--robot robros_igris_c_v2 \
+--smplx_file /home/robros/workspace/GMR/data/ACCAD/Male1General_c3d/General_A5_-_Pick_Up_Box_stageii.npz \
+--record_video \
+--save_path output/pickup.pkl
 
 python scripts/vis_robot_motion.py \
 --robot robros_igris_c_v2 \

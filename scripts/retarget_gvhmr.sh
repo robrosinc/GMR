@@ -1,13 +1,13 @@
 # robros igris_c
 python scripts/gvhmr_to_robot.py \
 --robot robros_igris_c_v2 \
---gvhmr_pred_file /home/robros/workspace/GVHMR/outputs/demo/bbiggi/hmr4d_results.pt \
+--gvhmr_pred_file /home/robros/workspace/GVHMR/outputs/demo/pickup_1hand/hmr4d_results.pt \
 --record_video \
---save_path bbiggi.pkl
+--save_path output/pickup_1hand.pkl
 
 python scripts/vis_robot_motion.py \
 --robot robros_igris_c_v2 \
---robot_motion_path bbiggi.pkl
+--robot_motion_path output/pickup_1hand.pkl
 
 
 # # fourier n1

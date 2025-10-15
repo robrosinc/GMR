@@ -4,12 +4,37 @@ import os
 import time
 
 import numpy as np
+import mujoco as mj
+from scipy.spatial.transform import Rotation as R
 
 from general_motion_retargeting import GeneralMotionRetargeting as GMR
 from general_motion_retargeting import RobotMotionViewer
 from general_motion_retargeting.utils.smpl import load_gvhmr_pred_file, get_gvhmr_data_offline_fast
 
 from rich import print
+
+def finite_difference(data: np.ndarray, dt: float) -> np.ndarray:
+    if len(data) < 2:
+        return np.zeros_like(data)
+    vel = np.zeros_like(data)
+    vel[1:-1] = (data[2:] - data[:-2]) / (2.0 * dt)
+    vel[0] = (data[1] - data[0]) / dt
+    vel[-1] = (data[-1] - data[-2]) / dt
+    return vel
+
+
+def quaternion_angular_velocity(quats_wxyz: np.ndarray, dt: float) -> np.ndarray:
+    if len(quats_wxyz) < 2:
+        return np.zeros((len(quats_wxyz), 3))
+    quats_xyzw = quats_wxyz[:, [1, 2, 3, 0]]
+    rotations = R.from_quat(quats_xyzw)
+    ang_vel = np.zeros((len(quats_wxyz), 3))
+    for i in range(1, len(quats_wxyz) - 1):
+        rel = rotations[i - 1].inv() * rotations[i + 1]
+        ang_vel[i] = rel.as_rotvec() / (2.0 * dt)
+    ang_vel[0] = (rotations[0].inv() * rotations[1]).as_rotvec() / dt
+    ang_vel[-1] = (rotations[-2].inv() * rotations[-1]).as_rotvec() / dt
+    return ang_vel
 
 if __name__ == "__main__":
     
@@ -102,6 +127,26 @@ if __name__ == "__main__":
         if save_dir:  # Only create directory if it's not empty
             os.makedirs(save_dir, exist_ok=True)
         qpos_list = []
+        # keybody_names = ['Link_Wrist_Pitch_Left', 'Link_Wrist_Pitch_Right', 'Link_Ankle_Pitch_Left', 'Link_Ankle_Pitch_Right']
+        keybody_names = ['Link_Wrist_Pitch_Left', 'Link_Wrist_Pitch_Right', 
+                    'Link_Ankle_Pitch_Left', 'Link_Ankle_Pitch_Right',
+                    'Link_Shoulder_Pitch_Left', 'Link_Shoulder_Pitch_Right',
+                    'Link_Hip_Pitch_Left', 'Link_Hip_Pitch_Right',
+                    'Link_Elbow_Pitch_Left', 'Link_Elbow_Pitch_Right',
+                    'Link_Knee_Pitch_Left', 'Link_Knee_Pitch_Right',
+                    'Link_Neck_Pitch']
+        keybody_pairs = [
+            (name, retarget.robot_body_names[name])
+            for name in keybody_names
+            if name in retarget.robot_body_names
+        ]
+        missing_keybodies = [name for name in keybody_names if name not in retarget.robot_body_names]
+        if missing_keybodies:
+            print(f"[warn] Missing keybodies in robot model: {missing_keybodies}")
+        keybody_names = [name for name, _ in keybody_pairs]
+        keybody_ids = [idx for _, idx in keybody_pairs]
+        keybody_samples = []
+        mj_data_save = mj.MjData(retarget.model)
     
     # Start the viewer
     i = 0
@@ -141,24 +186,37 @@ if __name__ == "__main__":
             rate_limit=args.rate_limit,
         )
         if args.save_path is not None:
-            qpos_list.append(qpos)
+            qpos_list.append(qpos.copy())
+            mj_data_save.qpos[:] = qpos
+            mj.mj_forward(retarget.model, mj_data_save)
+            keybody_samples.append(mj_data_save.xpos[keybody_ids].copy())
             
     if args.save_path is not None:
         import pickle
         root_pos = np.array([qpos[:3] for qpos in qpos_list])
-        # save from wxyz to xyzw
-        root_rot = np.array([qpos[3:7][[1,2,3,0]] for qpos in qpos_list])
+        root_rot_wxyz = np.array([qpos[3:7] for qpos in qpos_list])
+        root_rot = root_rot_wxyz[:, [1, 2, 3, 0]]
         dof_pos = np.array([qpos[7:] for qpos in qpos_list])
-        local_body_pos = None
-        body_names = None
+
+        dt = 1.0 / aligned_fps
+        root_vel = finite_difference(root_pos, dt)
+        dof_vel = finite_difference(dof_pos, dt)
+        root_angvel = quaternion_angular_velocity(root_rot_wxyz, dt)
+
+        keybody_pos = np.stack(keybody_samples) if keybody_samples else np.zeros((0, len(keybody_ids), 3))
+        print(keybody_ids)
         
         motion_data = {
             "fps": aligned_fps,
             "root_pos": root_pos,
             "root_rot": root_rot,
             "dof_pos": dof_pos,
-            "local_body_pos": local_body_pos,
-            "link_body_list": body_names,
+            "root_vel": root_vel,
+            "root_angvel": root_angvel,
+            "dof_vel": dof_vel,
+            "keybody_pos": keybody_pos,
+            "local_body_pos": None,
+            "link_body_list": keybody_names,
         }
         with open(args.save_path, "wb") as f:
             pickle.dump(motion_data, f)
