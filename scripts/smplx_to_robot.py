@@ -59,7 +59,7 @@ if __name__ == "__main__":
         choices=["unitree_g1", "unitree_g1_with_hands", "unitree_h1", "unitree_h1_2",
                  "booster_t1", "booster_t1_29dof","stanford_toddy", "fourier_n1", 
                 "engineai_pm01", "kuavo_s45", "hightorque_hi", "galaxea_r1pro", "berkeley_humanoid_lite", "booster_k1",
-                "pnd_adam_lite", "openloong", "tienkung", "robros_igris_c_v2"],
+                "pnd_adam_lite", "openloong", "tienkung", "robros_igris_c_v2", 'robros_igris_max'],
         default="unitree_g1",
     )
     
@@ -131,13 +131,33 @@ if __name__ == "__main__":
         if save_dir:  # Only create directory if it's not empty
             os.makedirs(save_dir, exist_ok=True)
         qpos_list = []
-        body_name_id_pairs = sorted(
-            [(name, idx) for name, idx in retarget.robot_body_names.items() if name],
-            key=lambda item: item[1],
-        )
-        print(retarget.robot_body_names.items())
-        keybody_names = ['Link_Wrist_Pitch_Left', 'Link_Wrist_Pitch_Right', 'Link_Ankle_Pitch_Left', 'Link_Ankle_Pitch_Right']
-        keybody_ids = [idx for body_name, idx in retarget.robot_body_names.items() if body_name in keybody_names]
+        if args.robot == 'robros_igris_c': 
+            keybody_names = ['Link_Wrist_Pitch_Left', 'Link_Wrist_Pitch_Right', 
+                        'Link_Ankle_Pitch_Left', 'Link_Ankle_Pitch_Right',
+                        'Link_Shoulder_Pitch_Left', 'Link_Shoulder_Pitch_Right',
+                        'Link_Hip_Pitch_Left', 'Link_Hip_Pitch_Right',
+                        'Link_Elbow_Pitch_Left', 'Link_Elbow_Pitch_Right',
+                        'Link_Knee_Pitch_Left', 'Link_Knee_Pitch_Right',
+                        'Link_Neck_Pitch']
+        elif args.robot == 'robros_igris_max':
+            keybody_names = ['Left_Arm_Wrist_Roll', 'Right_Arm_Wrist_Roll', 
+                        'Left_Leg_Ankle_Roll_Foot', 'Right_Leg_Ankle_Roll_Foot',
+                        'Left_Arm_Shoulder_Pitch', 'Right_Arm_Shoulder_Pitch',
+                        'Left_Leg_Hip_Pitch', 'Right_Leg_Hip_Pitch',
+                        'Left_Arm_Elbow', 'Right_Arm_Elbow',
+                        'Left_Leg_Knee', 'Right_Leg_Knee']
+        else:
+            keybody_names = []
+        keybody_pairs = [
+            (name, retarget.robot_body_names[name])
+            for name in keybody_names
+            if name in retarget.robot_body_names
+        ]
+        missing_keybodies = [name for name in keybody_names if name not in retarget.robot_body_names]
+        if missing_keybodies:
+            print(f"[warn] Missing keybodies in robot model: {missing_keybodies}")
+        keybody_names = [name for name, _ in keybody_pairs]
+        keybody_ids = [idx for _, idx in keybody_pairs]
         keybody_samples = []
         mj_data_save = mj.MjData(retarget.model)
     
@@ -197,6 +217,7 @@ if __name__ == "__main__":
         root_angvel = quaternion_angular_velocity(root_rot_wxyz, dt)
 
         keybody_pos = np.stack(keybody_samples) if keybody_samples else np.zeros((0, len(keybody_ids), 3))
+        print(keybody_ids)
 
         motion_data = {
             "fps": aligned_fps,

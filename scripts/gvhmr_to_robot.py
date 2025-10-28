@@ -128,7 +128,7 @@ if __name__ == "__main__":
             os.makedirs(save_dir, exist_ok=True)
         qpos_list = []
         # keybody_names = ['Link_Wrist_Pitch_Left', 'Link_Wrist_Pitch_Right', 'Link_Ankle_Pitch_Left', 'Link_Ankle_Pitch_Right']
-        if args.robot == 'robros_igris_c':
+        if args.robot == 'robros_igris_c_v2':
             keybody_names = ['Link_Wrist_Pitch_Left', 'Link_Wrist_Pitch_Right', 
                         'Link_Ankle_Pitch_Left', 'Link_Ankle_Pitch_Right',
                         'Link_Shoulder_Pitch_Left', 'Link_Shoulder_Pitch_Right',
@@ -142,8 +142,9 @@ if __name__ == "__main__":
                         'Left_Arm_Shoulder_Pitch', 'Right_Arm_Shoulder_Pitch',
                         'Left_Leg_Hip_Pitch', 'Right_Leg_Hip_Pitch',
                         'Left_Arm_Elbow', 'Right_Arm_Elbow',
-                        'Left_Leg_Knee', 'Right_Leg_Knee',
-                        'Waist_Yaw_Torso']
+                        'Left_Leg_Knee', 'Right_Leg_Knee']
+        else:
+            keybody_names = []
         keybody_pairs = [
             (name, retarget.robot_body_names[name])
             for name in keybody_names
