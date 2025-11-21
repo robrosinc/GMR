@@ -1,45 +1,15 @@
 # robros igris_c
 python scripts/bvh_to_robot.py \
 --robot robros_igris_c_v2 \
---bvh_file /home/robros/workspace/motion_datas/lafan1/fallAndGetUp1_subject5.bvh \
+--bvh_file /home/robros/workspace/motion_datas/lafan1/walk1_subject1.bvh \
 --record_video \
---save_path output/dance.pkl \
+--save_path output/walk1_subject1.bvh \
 --format lafan1
 
-python scripts/vis_robot_motion.py \
---robot robros_igris_c_v2 \
---robot_motion_path output/dance.pkl
-
-# # robros igris_max
-# python scripts/smplx_to_robot.py \
-# --robot robros_igris_max \
-# --smplx_file /home/robros/workspace/GMR/data/ACCAD/Male1General_c3d/General_A5_-_Pick_Up_Box_stageii.npz \
+# # unitree g1
+# python scripts/bvh_to_robot.py \
+# --robot unitree_g1 \
+# --bvh_file /home/robros/workspace/motion_datas/lafan1/walk1_subject1.bvh \
 # --record_video \
-# --save_path output/pickup.pkl
-
-# python scripts/vis_robot_motion.py \
-# --robot robros_igris_max \
-# --robot_motion_path output/pickup.pkl
-
-# # fourier n1
-# python scripts/smplx_to_robot.py \
-# --robot fourier_n1 \
-# --smplx_file /home/robros/workspace/GMR/data/ACCAD/Female1Walking_c3d/B3_-_walk1_stageii.npz \
-# --record_video \
-# --save_path run.pkl
-
-# python scripts/vis_robot_motion.py \
-# --robot fourier_n1 \
-# --robot_motion_path run.pkl
-
-
-# # unitree h1
-# python scripts/smplx_to_robot.py \
-# --robot unitree_h1 \
-# --smplx_file /home/robros/workspace/GMR/data/ACCAD/Female1Walking_c3d/B3_-_walk1_stageii.npz \
-# --record_video \
-# --save_path run.pkl
-
-# python scripts/vis_robot_motion.py \
-# --robot unitree_h1 \
-# --robot_motion_path run.pkl
+# --save_path output/walk1_subject1.bvh \
+# --format lafan1

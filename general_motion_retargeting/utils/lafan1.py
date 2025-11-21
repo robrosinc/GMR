@@ -46,3 +46,7 @@ def load_bvh_file(bvh_file, format="lafan1"):
 
     return frames, human_height
 
+
+def load_lafan1_file(bvh_file, format="lafan1"):
+    """Backward compatible helper expected by various scripts."""
+    return load_bvh_file(bvh_file, format=format)
