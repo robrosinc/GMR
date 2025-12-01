@@ -1,4 +1,5 @@
 import argparse
+import csv
 import pathlib
 import os
 import time
@@ -63,6 +64,11 @@ if __name__ == "__main__":
         default=None,
         help="Path to save the robot motion.",
     )
+    parser.add_argument(
+        "--smplx_csv_path",
+        default=None,
+        help="Optional CSV file to dump the SMPL-X data sent to retarget() for each frame.",
+    )
     
     parser.add_argument(
         "--loop",
@@ -121,6 +127,9 @@ if __name__ == "__main__":
     fps_counter = 0
     fps_start_time = time.time()
     fps_display_interval = 2.0  # Display FPS every 2 seconds
+    processed_frame_count = 0
+    smplx_csv_rows = []
+    csv_joint_names = None
     
     if args.save_path is not None:
         save_dir = os.path.dirname(args.save_path)
@@ -180,9 +189,23 @@ if __name__ == "__main__":
         
         # Update task targets.
         smplx_data = smplx_data_frames[i]
+        curr_frame_idx = processed_frame_count
 
         # retarget
         qpos = retarget.retarget(smplx_data)
+        
+        if args.smplx_csv_path is not None:
+            if csv_joint_names is None:
+                csv_joint_names = list(smplx_data.keys())
+            row_data = [curr_frame_idx]
+            for joint_name in csv_joint_names:
+                joint_pos, joint_quat = smplx_data[joint_name]
+                pos = np.asarray(joint_pos).reshape(-1)
+                quat = np.asarray(joint_quat).reshape(-1)
+                joint_values = np.concatenate([pos, quat])
+                row_data.append(" ".join(f"{val:.6f}" for val in joint_values))
+            smplx_csv_rows.append(row_data)
+        processed_frame_count += 1
 
         # visualize
         robot_motion_viewer.step(
@@ -231,6 +254,19 @@ if __name__ == "__main__":
         with open(args.save_path, "wb") as f:
             pickle.dump(motion_data, f)
         print(f"Saved to {args.save_path}")
+
+    if args.smplx_csv_path is not None:
+        csv_dir = os.path.dirname(args.smplx_csv_path)
+        if csv_dir:
+            os.makedirs(csv_dir, exist_ok=True)
+        with open(args.smplx_csv_path, "w", newline="") as csvfile:
+            writer = csv.writer(csvfile)
+            header = ["frame"]
+            if csv_joint_names is not None:
+                header.extend(csv_joint_names)
+            writer.writerow(header)
+            writer.writerows(smplx_csv_rows)
+        print(f"Saved SMPL-X data to {args.smplx_csv_path}")
             
       
     

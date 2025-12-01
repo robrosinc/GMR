@@ -10,6 +10,7 @@ from scipy.spatial.transform import Rotation as R
 from general_motion_retargeting import GeneralMotionRetargeting as GMR
 from general_motion_retargeting import RobotMotionViewer
 from general_motion_retargeting.utils.smpl import load_smplx_file, get_smplx_data_offline_fast
+from smplx.joint_names import JOINT_NAMES
 
 from rich import print
 
@@ -100,12 +101,14 @@ if __name__ == "__main__":
     smplx_data, body_model, smplx_output, actual_human_height = load_smplx_file(
         args.smplx_file, SMPLX_FOLDER
     )
+    # joint_names = JOINT_NAMES[: len(body_model.parents)]
+    # print(f"[info] Loaded SMPL-X file with {len(joint_names)} joints. Order:")
+    # print(", ".join(joint_names))
     
     # align fps
     tgt_fps = 30
     smplx_data_frames, aligned_fps = get_smplx_data_offline_fast(smplx_data, body_model, smplx_output, tgt_fps=tgt_fps)
     
-   
     # Initialize the retargeting system
     retarget = GMR(
         actual_human_height=actual_human_height,
@@ -186,6 +189,7 @@ if __name__ == "__main__":
 
         # retarget
         qpos = retarget.retarget(smplx_data)
+        # print('smplx data:', qpos.shape)
 
         # visualize
         robot_motion_viewer.step(

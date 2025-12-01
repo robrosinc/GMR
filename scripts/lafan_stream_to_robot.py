@@ -305,7 +305,7 @@ def main() -> None:
                 continue
 
             qpos = retargeter.retarget(frame)
-            rotated_root = _rotate_quat(qpos[3:7])
+            # rotated_root = _rotate_quat(qpos[3:7])
 
             viewer.step(
                 root_pos=qpos[:3],

@@ -42,6 +42,42 @@ def draw_frame(
         )
         v.user_scn.ngeom += 1
 
+
+def _install_keyboard_callback(viewer, callback) -> bool:
+    """Try to attach a keyboard callback regardless of MuJoCo version."""
+    if callback is None:
+        return False
+
+    if hasattr(viewer, "set_key_callback"):
+        try:
+            viewer.set_key_callback(callback)
+            return True
+        except TypeError:
+            pass
+
+    if hasattr(viewer, "set_keydown_callback"):
+        try:
+            viewer.set_keydown_callback(callback)
+            return True
+        except TypeError:
+            pass
+
+    if hasattr(viewer, "user_callbacks"):
+        try:
+            viewer.user_callbacks["keyboard"] = callback
+            return True
+        except Exception:
+            pass
+
+    if hasattr(viewer, "callbacks"):
+        try:
+            viewer.callbacks["keyboard"] = callback
+            return True
+        except Exception:
+            pass
+
+    return False
+
 class RobotMotionViewer:
     def __init__(self,
                 robot_type,
@@ -52,7 +88,8 @@ class RobotMotionViewer:
                 record_video=False,
                 video_path=None,
                 video_width=640,
-                video_height=480):
+                video_height=480,
+                key_callback=None):
         
         self.robot_type = robot_type
         self.xml_path = ROBOT_XML_DICT[robot_type]
@@ -68,11 +105,31 @@ class RobotMotionViewer:
         self.record_video = record_video
 
 
-        self.viewer = mjv.launch_passive(
+        viewer_kwargs = dict(
             model=self.model,
             data=self.data,
             show_left_ui=False,
-            show_right_ui=False)      
+            show_right_ui=False,
+        )
+        keyboard_attached = False
+        if key_callback is not None:
+            try:
+                self.viewer = mjv.launch_passive(
+                    key_callback=key_callback,
+                    **viewer_kwargs,
+                )
+                keyboard_attached = True
+            except TypeError:
+                self.viewer = mjv.launch_passive(**viewer_kwargs)
+        else:
+            self.viewer = mjv.launch_passive(**viewer_kwargs)
+
+        if key_callback is not None and not keyboard_attached:
+            keyboard_attached = _install_keyboard_callback(self.viewer, key_callback)
+            if not keyboard_attached:
+                print(
+                    "[yellow]RobotMotionViewer: unable to register keyboard callback; key controls disabled.[/yellow]"
+                )
 
         self.viewer.opt.flags[mj.mjtVisFlag.mjVIS_TRANSPARENT] = transparent_robot
         
@@ -101,7 +158,7 @@ class RobotMotionViewer:
             human_pos_offset=np.array([0.0, 0.0, 0]),
             # rate limit
             rate_limit=True, 
-            follow_camera=True,
+            follow_camera=None,
             ):
         """
         by default visualize robot motion.
@@ -119,6 +176,9 @@ class RobotMotionViewer:
         
         mj.mj_forward(self.model, self.data)
         
+        if follow_camera is None:
+            follow_camera = self.camera_follow
+
         if follow_camera:
             self.viewer.cam.lookat = self.data.xpos[self.model.body(self.robot_base).id]
             self.viewer.cam.distance = self.viewer_cam_distance
