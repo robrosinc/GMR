@@ -1,13 +1,14 @@
-# robros igris_c
-python scripts/gvhmr_to_robot.py \
---robot robros_igris_c_v2 \
---gvhmr_pred_file /home/robros/workspace/GVHMR/outputs/demo/20251102_205108_rotate/hmr4d_results.pt \
---record_video \
---save_path output/20251102_205108_rotate.pkl
+# # robros igris_c
+# python scripts/gvhmr_to_robot.py \
+# --robot robros_igris_c_v2 \
+# --gvhmr_pred_file /home/robros/workspace/GVHMR/outputs/demo/20251216231227/hmr4d_results.pt \
+# --record_video \
+# --save_path output/20251216231227.pkl \
+# --smplx_csv_path output/offline.csv
 
 python scripts/vis_robot_motion.py \
 --robot robros_igris_c_v2 \
---robot_motion_path output/20251102_205108_rotate.pkl
+--robot_motion_path output/robot_motion.pkl
 
 ######################################################
 

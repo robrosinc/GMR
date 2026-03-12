@@ -1,13 +1,13 @@
-# robros igris_c
-python scripts/smplx_to_robot.py \
---robot robros_igris_c_v2 \
---smplx_file /home/robros/workspace/GMR/output/obstacles1_subject1_enriched.npz \
---record_video \
---save_path output/obstacles1_subject1_enriched.pkl
+# # robros igris_c
+# python scripts/smplx_to_robot.py \
+# --robot robros_igris_c_v2 \
+# --smplx_file /home/robros/workspace/GMR/data/manual/smplx_like.npz \
+# --record_video \
+# --save_path output/tmp.pkl
 
 python scripts/vis_robot_motion.py \
 --robot robros_igris_c_v2 \
---robot_motion_path output/obstacles1_subject1_enriched.pkl
+--robot_motion_path output/tmp.pkl
 
 # # robros igris_max
 # python scripts/smplx_to_robot.py \
@@ -23,22 +23,22 @@ python scripts/vis_robot_motion.py \
 # # fourier n1
 # python scripts/smplx_to_robot.py \
 # --robot fourier_n1 \
-# --smplx_file /home/robros/workspace/GMR/data/ACCAD/Female1Walking_c3d/B3_-_walk1_stageii.npz \
+# --smplx_file /home/robros/workspace/GMR/data/CMU/90/90_01_stageii.npz \
 # --record_video \
-# --save_path run.pkl
+# --save_path tmp.pkl
 
 # python scripts/vis_robot_motion.py \
 # --robot fourier_n1 \
-# --robot_motion_path run.pkl
+# --robot_motion_path tmp.pkl
 
 
 # # unitree h1
 # python scripts/smplx_to_robot.py \
 # --robot unitree_h1 \
-# --smplx_file /home/robros/workspace/GMR/data/ACCAD/Female1Walking_c3d/B3_-_walk1_stageii.npz \
+# --smplx_file /home/robros/workspace/GMR/data/ACCAD/Female1General_c3d/A5_-_pick_up_box_stageii.npz \
 # --record_video \
-# --save_path run.pkl
+# --save_path tmp.pkl
 
 # python scripts/vis_robot_motion.py \
 # --robot unitree_h1 \
-# --robot_motion_path run.pkl
+# --robot_motion_path tmp.pkl

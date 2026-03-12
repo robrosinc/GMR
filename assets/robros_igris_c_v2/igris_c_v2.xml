@@ -121,7 +121,7 @@
           <geom name="Link_Waist_Roll_visual" pos="0 0 0" quat="1 0 0 0" material="random" type="mesh" mesh="Waist_Roll" class="visual" />
           <body name="Link_Waist_Pitch" pos="0.0 0.0 -0.04" quat="1.0 0.0 0.0 0.0">
             <site name = "pelvis_link_site" pos="0.050 0 0.047" quat="1 0 0 0" size="0.01"/>
-            <joint name="Joint_Waist_Pitch" type="hinge" ref="0.0" class="actuator_60" range="-0.436332313 0.436332313" axis="0 1 0" />
+            <joint name="Joint_Waist_Pitch" type="hinge" ref="0.0" class="actuator_60" range="-0.8 0.25" axis="0 1 0" />
             <inertial pos="-0.03810 0.0 0.08837" quat="1.0 0.0 0.0 0.0" mass="8.124" diaginertia="0.04342 0.05156 0.04212" />
             <!-- <geom name="Link_Waist_Pitch_collision" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="Waist_Pitch" class="collision" /> -->
             <geom name="Link_Waist_Pitch_visual" pos="0 0 0" quat="1 0 0 0" material="random" type="mesh" mesh="Waist_Pitch" class="visual" />
@@ -151,7 +151,7 @@
                       <!-- <geom name="Link_Ankle_Pitch_Left_collision" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="Ankle_Pitch_Left" class="collision" /> -->
                       <geom name="Link_Ankle_Pitch_Left_visual" pos="0 0 0" quat="1 0 0 0" material="random" type="mesh" mesh="Ankle_Pitch_Left" class="visual" />
                       <body name="Link_Ankle_Roll_Left" pos="0 0 0" quat="1.0 0.0 0.0 0.0">
-                        <joint name="Joint_Ankle_Roll_Left" type="hinge" ref="0.0" class="actuator_90" range="-0.261799388 0.261799388" axis="1 0 0" />
+                        <joint name="Joint_Ankle_Roll_Left" type="hinge" ref="0.0" class="actuator_90" range="-0.35 0.35" axis="1 0 0" />
                         <inertial pos="0.02167 0.00000 -0.05193" quat="1.0 0.0 0.0 0.0" mass="0.459" diaginertia="0.00045 0.00166 0.00158" />
                         <geom name="foot_box_left" pos="0.048 0 -0.073" quat="1 0 0 0" type="box" size="0.1 0.035 0.007" class="collision" rgba="0.1 0.1 0.1 1"/>
                         <geom name="Link_Ankle_Roll_Left_collision" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="Ankle_Roll_Left" class="collision" />
@@ -188,7 +188,7 @@
                       <!-- <geom name="Link_Ankle_Pitch_Right_collision" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="Ankle_Pitch_Right" class="collision" /> -->
                       <geom name="Link_Ankle_Pitch_Right_visual" pos="0 0 0" quat="1 0 0 0" material="random" type="mesh" mesh="Ankle_Pitch_Right" class="visual" />
                       <body name="Link_Ankle_Roll_Right" pos="0 0 0" quat="1.0 0.0 0.0 0.0">
-                        <joint name="Joint_Ankle_Roll_Right" type="hinge" ref="0.0" class="actuator_90" range="-0.261799388 0.261799388" axis="1 0 0" />
+                        <joint name="Joint_Ankle_Roll_Right" type="hinge" ref="0.0" class="actuator_90" range="-0.35 0.35" axis="1 0 0" />
                         <inertial pos="0.02167 0.00000 -0.05193" quat="1.0 0.0 0.0 0.0" mass="0.459" diaginertia="0.00045 0.00166 0.00158" />
                         <geom name="foot_box_right" pos="0.048 0 -0.073" quat="1 0 0 0" type="box" size="0.1 0.035 0.007" class="collision" rgba="0.1 0.1 0.1 1"/>
                         <geom name="Link_Ankle_Roll_Right_collision" pos="0 0 0" quat="1 0 0 0" type="mesh" mesh="Ankle_Roll_Right" class="collision" />
