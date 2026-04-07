@@ -38,6 +38,64 @@ def quaternion_angular_velocity(quats_wxyz: np.ndarray, dt: float) -> np.ndarray
     ang_vel[-1] = (rotations[-2].inv() * rotations[-1]).as_rotvec() / dt
     return ang_vel
 
+
+def get_default_keybody_names(robot_name: str) -> list[str]:
+    if robot_name in ("robros_igris_c", "robros_igris_c_v2"):
+        return [
+            "Link_Wrist_Pitch_Left",
+            "Link_Wrist_Pitch_Right",
+            "Link_Ankle_Pitch_Left",
+            "Link_Ankle_Pitch_Right",
+            "Link_Shoulder_Pitch_Left",
+            "Link_Shoulder_Pitch_Right",
+            "Link_Hip_Pitch_Left",
+            "Link_Hip_Pitch_Right",
+            "Link_Elbow_Pitch_Left",
+            "Link_Elbow_Pitch_Right",
+            "Link_Knee_Pitch_Left",
+            "Link_Knee_Pitch_Right",
+            "Link_Neck_Pitch",
+        ]
+    if robot_name == "robros_igris_max":
+        return [
+            "Left_Arm_Wrist_Roll",
+            "Right_Arm_Wrist_Roll",
+            "Left_Leg_Ankle_Roll_Foot",
+            "Right_Leg_Ankle_Roll_Foot",
+            "Left_Arm_Shoulder_Pitch",
+            "Right_Arm_Shoulder_Pitch",
+            "Left_Leg_Hip_Pitch",
+            "Right_Leg_Hip_Pitch",
+            "Left_Arm_Elbow",
+            "Right_Arm_Elbow",
+            "Left_Leg_Knee",
+            "Right_Leg_Knee",
+        ]
+    return []
+
+
+def compute_root_local_keybody(
+    root_pos: np.ndarray,
+    root_rot_xyzw: np.ndarray,
+    keybody_pos_world: np.ndarray,
+    keybody_rot_world_xyzw: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    num_frames = root_pos.shape[0]
+    num_keybodies = keybody_pos_world.shape[1]
+    if num_keybodies == 0:
+        return (
+            np.zeros((num_frames, 0, 3), dtype=np.float64),
+            np.zeros((num_frames, 0, 4), dtype=np.float64),
+        )
+
+    rel_world = keybody_pos_world - root_pos[:, None, :]
+    root_inv = R.from_quat(np.repeat(root_rot_xyzw, num_keybodies, axis=0)).inv()
+    rel_local = root_inv.apply(rel_world.reshape(-1, 3)).reshape(num_frames, num_keybodies, 3)
+
+    key_rot_world = R.from_quat(keybody_rot_world_xyzw.reshape(-1, 4))
+    key_rot_local = (root_inv * key_rot_world).as_quat().reshape(num_frames, num_keybodies, 4)
+    return rel_local, key_rot_local
+
 if __name__ == "__main__":
     
     HERE = pathlib.Path(__file__).parent
@@ -134,23 +192,7 @@ if __name__ == "__main__":
         if save_dir:  # Only create directory if it's not empty
             os.makedirs(save_dir, exist_ok=True)
         qpos_list = []
-        if args.robot == 'robros_igris_c': 
-            keybody_names = ['Link_Wrist_Pitch_Left', 'Link_Wrist_Pitch_Right', 
-                        'Link_Ankle_Pitch_Left', 'Link_Ankle_Pitch_Right',
-                        'Link_Shoulder_Pitch_Left', 'Link_Shoulder_Pitch_Right',
-                        'Link_Hip_Pitch_Left', 'Link_Hip_Pitch_Right',
-                        'Link_Elbow_Pitch_Left', 'Link_Elbow_Pitch_Right',
-                        'Link_Knee_Pitch_Left', 'Link_Knee_Pitch_Right',
-                        'Link_Neck_Pitch']
-        elif args.robot == 'robros_igris_max':
-            keybody_names = ['Left_Arm_Wrist_Roll', 'Right_Arm_Wrist_Roll', 
-                        'Left_Leg_Ankle_Roll_Foot', 'Right_Leg_Ankle_Roll_Foot',
-                        'Left_Arm_Shoulder_Pitch', 'Right_Arm_Shoulder_Pitch',
-                        'Left_Leg_Hip_Pitch', 'Right_Leg_Hip_Pitch',
-                        'Left_Arm_Elbow', 'Right_Arm_Elbow',
-                        'Left_Leg_Knee', 'Right_Leg_Knee']
-        else:
-            keybody_names = []
+        keybody_names = get_default_keybody_names(args.robot)
         keybody_pairs = [
             (name, retarget.robot_body_names[name])
             for name in keybody_names
@@ -161,7 +203,8 @@ if __name__ == "__main__":
             print(f"[warn] Missing keybodies in robot model: {missing_keybodies}")
         keybody_names = [name for name, _ in keybody_pairs]
         keybody_ids = [idx for _, idx in keybody_pairs]
-        keybody_samples = []
+        keybody_pos_samples = []
+        keybody_rot_wxyz_samples = []
         mj_data_save = mj.MjData(retarget.model)
     
     # Start the viewer
@@ -206,7 +249,8 @@ if __name__ == "__main__":
             qpos_list.append(qpos.copy())
             mj_data_save.qpos[:] = qpos
             mj.mj_forward(retarget.model, mj_data_save)
-            keybody_samples.append(mj_data_save.xpos[keybody_ids].copy())
+            keybody_pos_samples.append(mj_data_save.xpos[keybody_ids].copy())
+            keybody_rot_wxyz_samples.append(mj_data_save.xquat[keybody_ids].copy())
             
     if args.save_path is not None:
         import pickle
@@ -220,20 +264,37 @@ if __name__ == "__main__":
         dof_vel = finite_difference(dof_pos, dt)
         root_angvel = quaternion_angular_velocity(root_rot_wxyz, dt)
 
-        keybody_pos = np.stack(keybody_samples) if keybody_samples else np.zeros((0, len(keybody_ids), 3))
-        print(keybody_ids)
+        num_frames = len(qpos_list)
+        if keybody_pos_samples:
+            keybody_pos_world = np.stack(keybody_pos_samples)
+            keybody_rot_world_wxyz = np.stack(keybody_rot_wxyz_samples)
+            keybody_rot_world = keybody_rot_world_wxyz[..., [1, 2, 3, 0]]
+        else:
+            keybody_pos_world = np.zeros((num_frames, 0, 3))
+            keybody_rot_world = np.zeros((num_frames, 0, 4))
+        keybody_pos_local, keybody_rot_local = compute_root_local_keybody(
+            root_pos=root_pos,
+            root_rot_xyzw=root_rot_wxyz,
+            keybody_pos_world=keybody_pos_world,
+            keybody_rot_world_xyzw=keybody_rot_world,
+        )
 
         motion_data = {
             "fps": aligned_fps,
-            "root_pos": root_pos,
-            "root_rot": root_rot,
-            "dof_pos": dof_pos,
-            "root_vel": root_vel,
-            "root_angvel": root_angvel,
-            "dof_vel": dof_vel,
-            "keybody_pos": keybody_pos,
+            "root_pos": root_pos, # world
+            "root_rot": root_rot_wxyz, # world
+            "dof_pos": dof_pos, # local
+            "root_vel": root_vel, # global
+            "root_angvel": root_angvel, # global
+            "dof_vel": dof_vel, # local
+            "keybody_pos": keybody_pos_world,  # backward-compatible key (world frame)
+            "keybody_pos_world": keybody_pos_world, # world
+            "keybody_pos_local": keybody_pos_local, # local
+            "keybody_rot_world": keybody_rot_world, # world
+            "keybody_rot_local": keybody_rot_local, # local
             "local_body_pos": None,
             "link_body_list": keybody_names,
+            "local_body_link_body_list": None,
         }
         with open(args.save_path, "wb") as f:
             pickle.dump(motion_data, f)

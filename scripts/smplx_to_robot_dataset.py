@@ -6,7 +6,6 @@ import multiprocessing as mp
 
 import mujoco as mj
 import numpy as np
-from scipy.spatial.transform import Rotation as R
 from tqdm import tqdm
 from natsort import natsorted
 from rich import print
@@ -17,6 +16,20 @@ from general_motion_retargeting import GeneralMotionRetargeting as GMR
 from general_motion_retargeting.utils.smpl import load_smplx_file, get_smplx_data_offline_fast
 from general_motion_retargeting.kinematics_model import KinematicsModel
 from general_motion_retargeting import IK_CONFIG_ROOT
+try:
+    from smplx_to_robot import (
+        compute_root_local_keybody,
+        finite_difference,
+        get_default_keybody_names,
+        quaternion_angular_velocity,
+    )
+except ModuleNotFoundError:
+    from scripts.smplx_to_robot import (
+        compute_root_local_keybody,
+        finite_difference,
+        get_default_keybody_names,
+        quaternion_angular_velocity,
+    )
 import gc
 import time
 import psutil
@@ -129,15 +142,61 @@ def process_file(smplx_file_path, tgt_file_path, tgt_robot, SMPLX_FOLDER, tgt_fo
     if ROOT_ORIGIN_OFFSET:
         # offset using the first frame
         root_pos[:, :2] -= root_pos[0, :2]
-        
-        
+    
+    root_pos_torch = torch.from_numpy(root_pos).to(device=device, dtype=torch.float)
+    root_rot_torch = torch.from_numpy(root_rot).to(device=device, dtype=torch.float)
+    dof_pos_torch = torch.from_numpy(dof_pos).to(device=device, dtype=torch.float)
+    body_pos_world, body_rot_world = kinematics_model.forward_kinematics(
+        root_pos_torch,
+        root_rot_torch,
+        dof_pos_torch,
+    )
+
+    keybody_candidates = get_default_keybody_names(tgt_robot)
+    body_name_to_idx = {name: idx for idx, name in enumerate(body_names)}
+    keybody_pairs = [(name, body_name_to_idx[name]) for name in keybody_candidates if name in body_name_to_idx]
+    missing_keybodies = [name for name in keybody_candidates if name not in body_name_to_idx]
+    if missing_keybodies:
+        print(f"[warn] Missing keybodies in robot model: {missing_keybodies}")
+    keybody_names = [name for name, _ in keybody_pairs]
+    keybody_indices = [idx for _, idx in keybody_pairs]
+
+    if keybody_indices:
+        keybody_pos_world = body_pos_world[:, keybody_indices, :].detach().cpu().numpy()
+        keybody_rot_world = body_rot_world[:, keybody_indices, :].detach().cpu().numpy()
+    else:
+        keybody_pos_world = np.zeros((num_frames, 0, 3))
+        keybody_rot_world = np.zeros((num_frames, 0, 4))
+
+    keybody_pos_local, keybody_rot_local = compute_root_local_keybody(
+        root_pos=root_pos,
+        root_rot_xyzw=root_rot,
+        keybody_pos_world=keybody_pos_world,
+        keybody_rot_world_xyzw=keybody_rot_world,
+    )
+
+    dt = 1.0 / aligned_fps
+    root_vel = finite_difference(root_pos, dt)
+    dof_vel = finite_difference(dof_pos, dt)
+    root_rot_wxyz = root_rot[:, [3, 0, 1, 2]]
+    root_angvel = quaternion_angular_velocity(root_rot_wxyz, dt)
+
     motion_data = {
         "fps": aligned_fps,
         "root_pos": root_pos,
         "root_rot": root_rot,
         "dof_pos": dof_pos,
+        "root_vel": root_vel,
+        "root_angvel": root_angvel,
+        "dof_vel": dof_vel,
+        "keybody_pos": keybody_pos_world,  # backward-compatible key (world frame)
+        "keybody_pos_world": keybody_pos_world,
+        "keybody_pos_local": keybody_pos_local,
+        "keybody_rot_world": keybody_rot_world,
+        "keybody_rot_local": keybody_rot_local,
         "local_body_pos": local_body_pos.detach().cpu().numpy(),
-        "link_body_list": body_names,
+        "link_body_list": keybody_names,
+        "local_body_link_body_list": body_names,
     }
 
 
