@@ -42,19 +42,51 @@ def quaternion_angular_velocity(quats_wxyz: np.ndarray, dt: float) -> np.ndarray
 def get_default_keybody_names(robot_name: str) -> list[str]:
     if robot_name in ("robros_igris_c", "robros_igris_c_v2"):
         return [
-            "Link_Wrist_Pitch_Left",
-            "Link_Wrist_Pitch_Right",
-            "Link_Ankle_Pitch_Left",
-            "Link_Ankle_Pitch_Right",
-            "Link_Shoulder_Pitch_Left",
-            "Link_Shoulder_Pitch_Right",
+            "Link_Waist_Yaw",
+            "Link_Waist_Roll",
+            "Link_Waist_Pitch",
             "Link_Hip_Pitch_Left",
-            "Link_Hip_Pitch_Right",
-            "Link_Elbow_Pitch_Left",
-            "Link_Elbow_Pitch_Right",
+            "Link_Hip_Roll_Left",
+            "Link_Hip_Yaw_Left",
             "Link_Knee_Pitch_Left",
+            "Link_Ankle_Pitch_Left",
+            "Link_Ankle_Roll_Left",
+            "Link_Hip_Pitch_Right",
+            "Link_Hip_Roll_Right",
+            "Link_Hip_Yaw_Right",
             "Link_Knee_Pitch_Right",
+            "Link_Ankle_Pitch_Right",
+            "Link_Ankle_Roll_Right",
+            "Link_Shoulder_Pitch_Left",
+            "Link_Shoulder_Roll_Left",
+            "Link_Shoulder_Yaw_Left",
+            "Link_Elbow_Pitch_Left",
+            "Link_Wrist_Yaw_Left",
+            "Link_Wrist_Roll_Left",
+            "Link_Wrist_Pitch_Left",
+            "Link_Shoulder_Pitch_Right",
+            "Link_Shoulder_Roll_Right",
+            "Link_Shoulder_Yaw_Right",
+            "Link_Elbow_Pitch_Right",
+            "Link_Wrist_Yaw_Right",
+            "Link_Wrist_Roll_Right",
+            "Link_Wrist_Pitch_Right",
+            "Link_Neck_Yaw",
             "Link_Neck_Pitch",
+
+            # "Link_Wrist_Pitch_Left",
+            # "Link_Wrist_Pitch_Right",
+            # "Link_Ankle_Pitch_Left",
+            # "Link_Ankle_Pitch_Right",
+            # "Link_Shoulder_Pitch_Left",
+            # "Link_Shoulder_Pitch_Right",
+            # "Link_Hip_Pitch_Left",
+            # "Link_Hip_Pitch_Right",
+            # "Link_Elbow_Pitch_Left",
+            # "Link_Elbow_Pitch_Right",
+            # "Link_Knee_Pitch_Left",
+            # "Link_Knee_Pitch_Right",
+            # "Link_Neck_Pitch",
         ]
     if robot_name == "robros_igris_max":
         return [
@@ -282,7 +314,7 @@ if __name__ == "__main__":
         motion_data = {
             "fps": aligned_fps,
             "root_pos": root_pos, # world
-            "root_rot": root_rot_wxyz, # world
+            "root_rot": root_rot_wxyz, #root_rot_wxyz, # world
             "dof_pos": dof_pos, # local
             "root_vel": root_vel, # global
             "root_angvel": root_angvel, # global
