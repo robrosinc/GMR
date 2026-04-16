@@ -50,6 +50,18 @@ assets/body_models/
 *.wmv
 *.flv
 *.webm
+*.jpg
+*.png
+*.bvh
+
+# modeling file
+*.stl
+*.STL
+*.obj
+*.mtl
+*.dae
+*.npz
+*.csv
 
 # Archives
 *.zip
@@ -106,3 +118,9 @@ tmp/
 motion_data/
 
 GVHMR/
+
+batch_twist1_to_csv.py
+
+yaml_to_flat_csv.py
+
+compute_rotation.py
