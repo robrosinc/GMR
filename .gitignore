@@ -50,6 +50,18 @@ assets/body_models/
 *.wmv
 *.flv
 *.webm
+*.jpg
+*.png
+*.bvh
+
+# modeling file
+*.stl
+*.STL
+*.obj
+*.mtl
+*.dae
+*.npz
+*.csv
 
 # Archives
 *.zip
