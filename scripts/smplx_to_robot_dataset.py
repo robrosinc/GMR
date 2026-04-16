@@ -15,17 +15,11 @@ import pickle
 from general_motion_retargeting import GeneralMotionRetargeting as GMR
 from general_motion_retargeting.utils.smpl import load_smplx_file, get_smplx_data_offline_fast
 from general_motion_retargeting.kinematics_model import KinematicsModel
+from general_motion_retargeting.utils.motion_utils import (
+    build_motion_data,
+    get_default_keybody_names,
+)
 from general_motion_retargeting import IK_CONFIG_ROOT
-try:
-    from smplx_to_robot import (
-        build_motion_data,
-        get_default_keybody_names,
-    )
-except ModuleNotFoundError:
-    from scripts.smplx_to_robot import (
-        build_motion_data,
-        get_default_keybody_names,
-    )
 import gc
 import time
 import psutil

@@ -30,10 +30,10 @@ from rich import print
 
 from general_motion_retargeting import GeneralMotionRetargeting as GMR
 from general_motion_retargeting import RobotMotionViewer
-try:
-    from smplx_to_robot import build_motion_data, get_default_keybody_names
-except ModuleNotFoundError:
-    from scripts.smplx_to_robot import build_motion_data, get_default_keybody_names
+from general_motion_retargeting.utils.motion_utils import (
+    build_motion_data,
+    get_default_keybody_names,
+)
 
 
 DEFAULT_BONE_NAMES: Tuple[str, ...] = (

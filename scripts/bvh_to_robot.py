@@ -10,12 +10,12 @@ import numpy as np
 from general_motion_retargeting import GeneralMotionRetargeting as GMR
 from general_motion_retargeting import RobotMotionViewer
 from general_motion_retargeting.utils.lafan1 import load_bvh_file
+from general_motion_retargeting.utils.motion_utils import (
+    build_motion_data,
+    get_default_keybody_names,
+)
 from rich import print
 from tqdm import tqdm
-try:
-    from smplx_to_robot import build_motion_data, get_default_keybody_names
-except ModuleNotFoundError:
-    from scripts.smplx_to_robot import build_motion_data, get_default_keybody_names
 
 
 if __name__ == "__main__":

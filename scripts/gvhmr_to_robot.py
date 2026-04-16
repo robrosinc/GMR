@@ -10,11 +10,11 @@ import numpy as np
 
 from general_motion_retargeting import GeneralMotionRetargeting as GMR
 from general_motion_retargeting import RobotMotionViewer
+from general_motion_retargeting.utils.motion_utils import (
+    build_motion_data,
+    get_default_keybody_names,
+)
 from general_motion_retargeting.utils.smpl import load_gvhmr_pred_file, get_gvhmr_data_offline_fast
-try:
-    from smplx_to_robot import build_motion_data, get_default_keybody_names
-except ModuleNotFoundError:
-    from scripts.smplx_to_robot import build_motion_data, get_default_keybody_names
 
 from rich import print
 
