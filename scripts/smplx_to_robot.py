@@ -2,6 +2,7 @@ import argparse
 import pathlib
 import os
 import time
+import pickle
 
 import mujoco as mj
 import numpy as np
@@ -28,8 +29,8 @@ def finite_difference(data: np.ndarray, dt: float) -> np.ndarray:
 def quaternion_angular_velocity(quats_wxyz: np.ndarray, dt: float) -> np.ndarray:
     if len(quats_wxyz) < 2:
         return np.zeros((len(quats_wxyz), 3))
-    quats_xyzw = quats_wxyz[:, [1, 2, 3, 0]]
-    rotations = R.from_quat(quats_xyzw)
+    quats_scipy = quat_wxyz_to_scipy(quats_wxyz)
+    rotations = R.from_quat(quats_scipy)
     ang_vel = np.zeros((len(quats_wxyz), 3))
     for i in range(1, len(quats_wxyz) - 1):
         rel = rotations[i - 1].inv() * rotations[i + 1]
@@ -64,6 +65,7 @@ def get_default_keybody_names(robot_name: str) -> list[str]:
             "Link_Wrist_Yaw_Left",
             "Link_Wrist_Roll_Left",
             "Link_Wrist_Pitch_Left",
+            "Left_Hand",
             "Link_Shoulder_Pitch_Right",
             "Link_Shoulder_Roll_Right",
             "Link_Shoulder_Yaw_Right",
@@ -71,6 +73,7 @@ def get_default_keybody_names(robot_name: str) -> list[str]:
             "Link_Wrist_Yaw_Right",
             "Link_Wrist_Roll_Right",
             "Link_Wrist_Pitch_Right",
+            "Right_Hand",
             "Link_Neck_Yaw",
             "Link_Neck_Pitch",
 
@@ -108,10 +111,14 @@ def get_default_keybody_names(robot_name: str) -> list[str]:
 
 def compute_root_local_keybody(
     root_pos: np.ndarray,
-    root_rot_xyzw: np.ndarray,
+    root_rot_wxyz: np.ndarray,
     keybody_pos_world: np.ndarray,
-    keybody_rot_world_xyzw: np.ndarray,
+    keybody_rot_world_wxyz: np.ndarray,
 ) -> tuple[np.ndarray, np.ndarray]:
+    """Compute keybody pose in root-local frame.
+
+    All quaternion inputs/outputs use MuJoCo order: wxyz (scalar-first).
+    """
     num_frames = root_pos.shape[0]
     num_keybodies = keybody_pos_world.shape[1]
     if num_keybodies == 0:
@@ -121,12 +128,73 @@ def compute_root_local_keybody(
         )
 
     rel_world = keybody_pos_world - root_pos[:, None, :]
-    root_inv = R.from_quat(np.repeat(root_rot_xyzw, num_keybodies, axis=0)).inv()
+    root_rot_scipy = quat_wxyz_to_scipy(root_rot_wxyz)
+    root_inv = R.from_quat(np.repeat(root_rot_scipy, num_keybodies, axis=0)).inv()
     rel_local = root_inv.apply(rel_world.reshape(-1, 3)).reshape(num_frames, num_keybodies, 3)
 
-    key_rot_world = R.from_quat(keybody_rot_world_xyzw.reshape(-1, 4))
-    key_rot_local = (root_inv * key_rot_world).as_quat().reshape(num_frames, num_keybodies, 4)
-    return rel_local, key_rot_local
+    keybody_rot_world_scipy = quat_wxyz_to_scipy(keybody_rot_world_wxyz)
+    key_rot_world = R.from_quat(keybody_rot_world_scipy.reshape(-1, 4))
+    key_rot_local_scipy = (root_inv * key_rot_world).as_quat().reshape(num_frames, num_keybodies, 4)
+    key_rot_local_wxyz = quat_scipy_to_wxyz(key_rot_local_scipy)
+    return rel_local, key_rot_local_wxyz
+
+
+def quat_wxyz_to_scipy(quat: np.ndarray) -> np.ndarray:
+    return quat[..., [1, 2, 3, 0]]
+
+
+def quat_scipy_to_wxyz(quat: np.ndarray) -> np.ndarray:
+    return quat[..., [3, 0, 1, 2]]
+
+
+def build_motion_data(
+    aligned_fps: float,
+    root_pos: np.ndarray,
+    root_rot_wxyz: np.ndarray,
+    dof_pos: np.ndarray,
+    keybody_pos_world: np.ndarray | None,
+    keybody_rot_world_wxyz: np.ndarray | None,
+    keybody_names: list[str] | None,
+    local_body_pos: np.ndarray | None = None,
+    local_body_link_body_list: list[str] | None = None,
+) -> dict:
+    num_frames = root_pos.shape[0]
+    if keybody_pos_world is None:
+        keybody_pos_world = np.zeros((num_frames, 0, 3))
+    if keybody_rot_world_wxyz is None:
+        keybody_rot_world_wxyz = np.zeros((num_frames, 0, 4))
+    if keybody_names is None:
+        keybody_names = []
+
+    dt = 1.0 / aligned_fps
+    root_vel = finite_difference(root_pos, dt)
+    dof_vel = finite_difference(dof_pos, dt)
+    root_angvel = quaternion_angular_velocity(root_rot_wxyz, dt)
+
+    keybody_pos_local, keybody_rot_local = compute_root_local_keybody(
+        root_pos=root_pos,
+        root_rot_wxyz=root_rot_wxyz,
+        keybody_pos_world=keybody_pos_world,
+        keybody_rot_world_wxyz=keybody_rot_world_wxyz,
+    )
+
+    return {
+        "fps": aligned_fps,
+        "root_pos": root_pos,  # world
+        "root_rot": root_rot_wxyz,  # world (wxyz for MuJoCo qpos)
+        "root_vel": root_vel,  # global
+        "root_angvel": root_angvel,  # global
+        "dof_pos": dof_pos,  # local
+        "dof_vel": dof_vel,  # local
+        "keybody_pos_world": keybody_pos_world,  # world
+        "keybody_pos_local": keybody_pos_local,  # local
+        "keybody_rot_world": keybody_rot_world_wxyz,  # world
+        "keybody_rot_local": keybody_rot_local,  # local (wxyz)
+        "keybody_pos": keybody_pos_world,  # backward-compatible key (world frame)
+        "link_body_list": keybody_names,
+        "local_body_link_body_list": local_body_link_body_list,
+        "local_body_pos": local_body_pos,
+    }
 
 if __name__ == "__main__":
     
@@ -285,49 +353,29 @@ if __name__ == "__main__":
             keybody_rot_wxyz_samples.append(mj_data_save.xquat[keybody_ids].copy())
             
     if args.save_path is not None:
-        import pickle
         root_pos = np.array([qpos[:3] for qpos in qpos_list])
         root_rot_wxyz = np.array([qpos[3:7] for qpos in qpos_list])
-        root_rot = root_rot_wxyz[:, [1, 2, 3, 0]]
         dof_pos = np.array([qpos[7:] for qpos in qpos_list])
-
-        dt = 1.0 / aligned_fps
-        root_vel = finite_difference(root_pos, dt)
-        dof_vel = finite_difference(dof_pos, dt)
-        root_angvel = quaternion_angular_velocity(root_rot_wxyz, dt)
 
         num_frames = len(qpos_list)
         if keybody_pos_samples:
             keybody_pos_world = np.stack(keybody_pos_samples)
             keybody_rot_world_wxyz = np.stack(keybody_rot_wxyz_samples)
-            keybody_rot_world = keybody_rot_world_wxyz[..., [1, 2, 3, 0]]
         else:
             keybody_pos_world = np.zeros((num_frames, 0, 3))
-            keybody_rot_world = np.zeros((num_frames, 0, 4))
-        keybody_pos_local, keybody_rot_local = compute_root_local_keybody(
-            root_pos=root_pos,
-            root_rot_xyzw=root_rot_wxyz,
-            keybody_pos_world=keybody_pos_world,
-            keybody_rot_world_xyzw=keybody_rot_world,
-        )
+            keybody_rot_world_wxyz = np.zeros((num_frames, 0, 4))
 
-        motion_data = {
-            "fps": aligned_fps,
-            "root_pos": root_pos, # world
-            "root_rot": root_rot_wxyz, #root_rot_wxyz, # world
-            "dof_pos": dof_pos, # local
-            "root_vel": root_vel, # global
-            "root_angvel": root_angvel, # global
-            "dof_vel": dof_vel, # local
-            "keybody_pos": keybody_pos_world,  # backward-compatible key (world frame)
-            "keybody_pos_world": keybody_pos_world, # world
-            "keybody_pos_local": keybody_pos_local, # local
-            "keybody_rot_world": keybody_rot_world, # world
-            "keybody_rot_local": keybody_rot_local, # local
-            "local_body_pos": None,
-            "link_body_list": keybody_names,
-            "local_body_link_body_list": None,
-        }
+        motion_data = build_motion_data(
+            aligned_fps=aligned_fps,
+            root_pos=root_pos,
+            root_rot_wxyz=root_rot_wxyz,
+            dof_pos=dof_pos,
+            keybody_pos_world=keybody_pos_world,
+            keybody_rot_world_wxyz=keybody_rot_world_wxyz,
+            keybody_names=keybody_names,
+            local_body_pos=None,
+            local_body_link_body_list=None,
+        )
         with open(args.save_path, "wb") as f:
             pickle.dump(motion_data, f)
         print(f"Saved to {args.save_path}")

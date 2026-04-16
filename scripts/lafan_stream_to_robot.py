@@ -19,15 +19,21 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import pickle
 import time
 from pathlib import Path
 from typing import Dict, Iterable, List, Sequence, Tuple
 
+import mujoco as mj
 import numpy as np
 from rich import print
 
 from general_motion_retargeting import GeneralMotionRetargeting as GMR
 from general_motion_retargeting import RobotMotionViewer
+try:
+    from smplx_to_robot import build_motion_data, get_default_keybody_names
+except ModuleNotFoundError:
+    from scripts.smplx_to_robot import build_motion_data, get_default_keybody_names
 
 
 DEFAULT_BONE_NAMES: Tuple[str, ...] = (
@@ -181,6 +187,46 @@ def _iter_fifo_lines(path: Path) -> Iterable[str]:
             yield line.strip()
 
 
+def _save_motion_pickle(
+    save_path: Path,
+    motion_fps: float,
+    qpos_list: list[np.ndarray],
+    keybody_pos_samples: list[np.ndarray],
+    keybody_rot_wxyz_samples: list[np.ndarray],
+    keybody_names: list[str],
+) -> None:
+    save_dir = save_path.parent
+    if str(save_dir) not in ("", "."):
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+    root_pos = np.array([qpos[:3] for qpos in qpos_list])
+    root_rot_wxyz = np.array([qpos[3:7] for qpos in qpos_list])
+    dof_pos = np.array([qpos[7:] for qpos in qpos_list])
+    num_frames = len(qpos_list)
+
+    if keybody_pos_samples:
+        keybody_pos_world = np.stack(keybody_pos_samples)
+        keybody_rot_world_wxyz = np.stack(keybody_rot_wxyz_samples)
+    else:
+        keybody_pos_world = np.zeros((num_frames, 0, 3))
+        keybody_rot_world_wxyz = np.zeros((num_frames, 0, 4))
+
+    motion_data = build_motion_data(
+        aligned_fps=motion_fps,
+        root_pos=root_pos,
+        root_rot_wxyz=root_rot_wxyz,
+        dof_pos=dof_pos,
+        keybody_pos_world=keybody_pos_world,
+        keybody_rot_world_wxyz=keybody_rot_world_wxyz,
+        keybody_names=keybody_names,
+        local_body_pos=None,
+        local_body_link_body_list=None,
+    )
+    with save_path.open("wb") as f:
+        pickle.dump(motion_data, f)
+    print(f"[green]Saved motion pickle:[/green] {save_path}")
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Stream LaFAN BVH frames from FIFO into GMR.")
     parser.add_argument(
@@ -248,11 +294,28 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Enable RobotMotionViewer rate limiting to motion_fps.",
     )
+    parser.add_argument(
+        "--save_path",
+        type=Path,
+        default=None,
+        help="Output .pkl path in standard GMR motion format.",
+    )
+    parser.add_argument(
+        "--save_num_frames",
+        type=int,
+        default=None,
+        help="Number of streamed frames to collect before auto-saving one .pkl and exiting.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
+    if (args.save_path is None) != (args.save_num_frames is None):
+        raise ValueError("Set both --save_path and --save_num_frames together, or set neither.")
+    if args.save_num_frames is not None and args.save_num_frames <= 0:
+        raise ValueError("--save_num_frames must be a positive integer.")
+
     bone_names = tuple(name.strip() for name in args.bone_names.split(",") if name.strip())
     if len(bone_names) < len(DEFAULT_BONE_NAMES):
         print(
@@ -281,9 +344,32 @@ def main() -> None:
         f"[cyan]Listening for LaFAN BVH frames on {args.fifo_path} "
         f"(format={args.format}, bones={len(bone_names)})[/cyan]"
     )
+    save_enabled = args.save_path is not None
+    if save_enabled:
+        keybody_names = get_default_keybody_names(args.robot)
+        keybody_pairs = [
+            (name, retargeter.robot_body_names[name])
+            for name in keybody_names
+            if name in retargeter.robot_body_names
+        ]
+        missing_keybodies = [name for name in keybody_names if name not in retargeter.robot_body_names]
+        if missing_keybodies:
+            print(f"[warn] Missing keybodies in robot model: {missing_keybodies}")
+        keybody_names = [name for name, _ in keybody_pairs]
+        keybody_ids = [idx for _, idx in keybody_pairs]
+        qpos_list: list[np.ndarray] = []
+        keybody_pos_samples: list[np.ndarray] = []
+        keybody_rot_wxyz_samples: list[np.ndarray] = []
+        mj_data_save = mj.MjData(retargeter.model)
+        print(
+            f"[cyan]Will auto-save after {args.save_num_frames} frames:[/cyan] "
+            f"{args.save_path}"
+        )
+
     fps_counter = 0
     fps_start = time.time()
     fps_interval = 2.0
+    auto_saved = False
     try:
         for line in _iter_fifo_lines(args.fifo_path):
             if not line:
@@ -318,6 +404,24 @@ def main() -> None:
                 follow_camera=True,
             )
 
+            if save_enabled:
+                qpos_list.append(qpos.copy())
+                mj_data_save.qpos[:] = qpos
+                mj.mj_forward(retargeter.model, mj_data_save)
+                keybody_pos_samples.append(mj_data_save.xpos[keybody_ids].copy())
+                keybody_rot_wxyz_samples.append(mj_data_save.xquat[keybody_ids].copy())
+                if len(qpos_list) >= args.save_num_frames:
+                    _save_motion_pickle(
+                        save_path=args.save_path,
+                        motion_fps=args.motion_fps,
+                        qpos_list=qpos_list,
+                        keybody_pos_samples=keybody_pos_samples,
+                        keybody_rot_wxyz_samples=keybody_rot_wxyz_samples,
+                        keybody_names=keybody_names,
+                    )
+                    auto_saved = True
+                    break
+
             fps_counter += 1
             now = time.time()
             if now - fps_start >= fps_interval:
@@ -328,6 +432,8 @@ def main() -> None:
     except KeyboardInterrupt:
         print("[yellow]Interrupted, closing viewer.[/yellow]")
     finally:
+        if save_enabled and (not auto_saved):
+            print("[yellow]Stream ended before reaching --save_num_frames. No pickle was saved.[/yellow]")
         viewer.close()
 
 

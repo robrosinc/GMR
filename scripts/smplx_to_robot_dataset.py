@@ -18,17 +18,13 @@ from general_motion_retargeting.kinematics_model import KinematicsModel
 from general_motion_retargeting import IK_CONFIG_ROOT
 try:
     from smplx_to_robot import (
-        compute_root_local_keybody,
-        finite_difference,
+        build_motion_data,
         get_default_keybody_names,
-        quaternion_angular_velocity,
     )
 except ModuleNotFoundError:
     from scripts.smplx_to_robot import (
-        compute_root_local_keybody,
-        finite_difference,
+        build_motion_data,
         get_default_keybody_names,
-        quaternion_angular_velocity,
     )
 import gc
 import time
@@ -36,7 +32,7 @@ import psutil
 import tracemalloc
 
 
-def check_memory(threshold_gb=30):  # adjust based on your available memory
+def check_memory(threshold_gb=10):  # adjust based on your available memory
     mem = psutil.virtual_memory()
     used_memory_gb = (mem.total - mem.available) / (1024 ** 3)
     available_memory_gb = mem.available / (1024 ** 3)
@@ -111,8 +107,8 @@ def process_file(smplx_file_path, tgt_file_path, tgt_robot, SMPLX_FOLDER, tgt_fo
     except Exception as e:
         print(f"Error processing {smplx_file_path}: {e}")
         return
-    root_rot = qpos_list[:, 3:7]
-    root_rot[:, [0, 1, 2, 3]] = root_rot[:, [1, 2, 3, 0]]
+    root_rot_wxyz = qpos_list[:, 3:7]
+    root_rot_fk = root_rot_wxyz[:, [1, 2, 3, 0]]
     dof_pos = qpos_list[:, 7:]
     num_frames = root_pos.shape[0]
 
@@ -132,7 +128,7 @@ def process_file(smplx_file_path, tgt_file_path, tgt_robot, SMPLX_FOLDER, tgt_fo
     if HEIGHT_ADJUST:
         # height adjust to ensure the lowerset part is on the ground
         body_pos, _ = kinematics_model.forward_kinematics(torch.from_numpy(root_pos).to(device=device, dtype=torch.float), 
-                                                        torch.from_numpy(root_rot).to(device=device, dtype=torch.float), 
+                                                        torch.from_numpy(root_rot_fk).to(device=device, dtype=torch.float), 
                                                         torch.from_numpy(dof_pos).to(device=device, dtype=torch.float)) # TxNx3
         ground_offset = 0.0
         lowerst_height = torch.min(body_pos[..., 2]).item()
@@ -144,7 +140,7 @@ def process_file(smplx_file_path, tgt_file_path, tgt_robot, SMPLX_FOLDER, tgt_fo
         root_pos[:, :2] -= root_pos[0, :2]
     
     root_pos_torch = torch.from_numpy(root_pos).to(device=device, dtype=torch.float)
-    root_rot_torch = torch.from_numpy(root_rot).to(device=device, dtype=torch.float)
+    root_rot_torch = torch.from_numpy(root_rot_fk).to(device=device, dtype=torch.float)
     dof_pos_torch = torch.from_numpy(dof_pos).to(device=device, dtype=torch.float)
     body_pos_world, body_rot_world = kinematics_model.forward_kinematics(
         root_pos_torch,
@@ -163,41 +159,23 @@ def process_file(smplx_file_path, tgt_file_path, tgt_robot, SMPLX_FOLDER, tgt_fo
 
     if keybody_indices:
         keybody_pos_world = body_pos_world[:, keybody_indices, :].detach().cpu().numpy()
-        keybody_rot_world = body_rot_world[:, keybody_indices, :].detach().cpu().numpy()
+        keybody_rot_world_fk = body_rot_world[:, keybody_indices, :].detach().cpu().numpy()
+        keybody_rot_world_wxyz = keybody_rot_world_fk[:, :, [3, 0, 1, 2]]
     else:
         keybody_pos_world = np.zeros((num_frames, 0, 3))
-        keybody_rot_world = np.zeros((num_frames, 0, 4))
+        keybody_rot_world_wxyz = np.zeros((num_frames, 0, 4))
 
-    keybody_pos_local, keybody_rot_local = compute_root_local_keybody(
+    motion_data = build_motion_data(
+        aligned_fps=aligned_fps,
         root_pos=root_pos,
-        root_rot_xyzw=root_rot,
+        root_rot_wxyz=root_rot_wxyz,
+        dof_pos=dof_pos,
         keybody_pos_world=keybody_pos_world,
-        keybody_rot_world_xyzw=keybody_rot_world,
+        keybody_rot_world_wxyz=keybody_rot_world_wxyz,
+        keybody_names=keybody_names,
+        local_body_pos=local_body_pos.detach().cpu().numpy(),
+        local_body_link_body_list=body_names,
     )
-
-    dt = 1.0 / aligned_fps
-    root_vel = finite_difference(root_pos, dt)
-    dof_vel = finite_difference(dof_pos, dt)
-    root_rot_wxyz = root_rot[:, [3, 0, 1, 2]]
-    root_angvel = quaternion_angular_velocity(root_rot_wxyz, dt)
-
-    motion_data = {
-        "fps": aligned_fps,
-        "root_pos": root_pos,
-        "root_rot": root_rot,
-        "dof_pos": dof_pos,
-        "root_vel": root_vel,
-        "root_angvel": root_angvel,
-        "dof_vel": dof_vel,
-        "keybody_pos": keybody_pos_world,  # backward-compatible key (world frame)
-        "keybody_pos_world": keybody_pos_world,
-        "keybody_pos_local": keybody_pos_local,
-        "keybody_rot_world": keybody_rot_world,
-        "keybody_rot_local": keybody_rot_local,
-        "local_body_pos": local_body_pos.detach().cpu().numpy(),
-        "link_body_list": keybody_names,
-        "local_body_link_body_list": body_names,
-    }
 
 
     os.makedirs(os.path.dirname(tgt_file_path), exist_ok=True)
@@ -253,10 +231,12 @@ def main():
 
     verbose = False
 
-    hard_motions_paths = [hard_motions_folder / "0.txt", 
-                          hard_motions_folder / "1.txt"]
+    hard_motions_paths = [hard_motions_folder / "0.txt", hard_motions_folder / "1.txt"]
     hard_motions = []
     for hard_motions_path in hard_motions_paths:
+        if not hard_motions_path.exists():
+            print(f"[warn] hard motion list not found, skip: {hard_motions_path}")
+            continue
         with open(hard_motions_path, "r") as f:
             for line in f:
                 if "Motion:" in line:

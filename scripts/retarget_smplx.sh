@@ -1,13 +1,28 @@
 # # robros igris_c
 # python scripts/smplx_to_robot.py \
 # --robot robros_igris_c_v2 \
-# --smplx_file /home/robros/workspace/GMR/data/manual/smplx_like.npz \
+# --smplx_file /home/robros/workspace/GMR/output/stand_to_jog_new.npz \
 # --record_video \
-# --save_path output/tmp.pkl
+# --save_path output/stand_to_jog_new.pkl
 
-python scripts/vis_robot_motion.py \
+# python scripts/vis_robot_motion.py \
+# --robot robros_igris_c_v2 \
+# --robot_motion_path /home/robros/workspace/GMR/output/stand_to_jog_new.pkl
+
+#################################################
+
+# robros igris_c directory
+python scripts/smplx_to_robot_dataset.py \
 --robot robros_igris_c_v2 \
---robot_motion_path output/tmp.pkl
+--src_folder /home/robros/workspace/GMR/data/ACCAD/Female1Gestures_c3d \
+--tgt_folder /home/robros/workspace/GMR/output/retargeted/ \
+--num_cpus 4 \
+
+python scripts/vis_robot_motion_directory.py \
+--robot robros_igris_c_v2 \
+--robot_motion_dir /home/robros/workspace/GMR/output/retargeted
+
+###############################################
 
 # # robros igris_max
 # python scripts/smplx_to_robot.py \
@@ -23,12 +38,36 @@ python scripts/vis_robot_motion.py \
 # # fourier n1
 # python scripts/smplx_to_robot.py \
 # --robot fourier_n1 \
-# --smplx_file /home/robros/workspace/GMR/data/CMU/90/90_01_stageii.npz \
+# --smplx_file /home/robros/workspace/GMR/data/ACCAD/Male2MartialArtsStances_c3d/D1_-_stand_to_ready_stageii.npz \
 # --record_video \
 # --save_path tmp.pkl
 
 # python scripts/vis_robot_motion.py \
 # --robot fourier_n1 \
+# --robot_motion_path tmp.pkl
+
+
+# # adam lite
+# python scripts/smplx_to_robot.py \
+# --robot pnd_adam_lite \
+# --smplx_file /home/robros/workspace/GMR/data/ACCAD/Male2MartialArtsStances_c3d/D1_-_stand_to_ready_stageii.npz \
+# --record_video \
+# --save_path tmp.pkl
+
+# python scripts/vis_robot_motion.py \
+# --robot pnd_adam_lite \
+# --robot_motion_path tmp.pkl
+
+
+# # kuavo s45
+# python scripts/smplx_to_robot.py \
+# --robot kuavo_s45 \
+# --smplx_file /home/robros/workspace/GMR/data/ACCAD/Male2MartialArtsStances_c3d/D1_-_stand_to_ready_stageii.npz \
+# --record_video \
+# --save_path tmp.pkl
+
+# python scripts/vis_robot_motion.py \
+# --robot kuavo_s45 \
 # --robot_motion_path tmp.pkl
 
 
