@@ -37,7 +37,7 @@ from loop_rate_limiters import RateLimiter
 from scipy.spatial.transform import Rotation as R
 from general_motion_retargeting import GeneralMotionRetargeting as GMR
 from general_motion_retargeting import draw_frame
-from general_motion_retargeting import ROBOT_XML_DICT, ROBOT_BASE_DICT
+from general_motion_retargeting import ROBOT_XML_DICT, ROBOT_BASE_DICT, IK_CONFIG_DICT
 from general_motion_retargeting import human_head_to_robot_neck
 from rich import print
 from tqdm import tqdm
@@ -80,7 +80,7 @@ def get_interpolated_obs(state_machine):
     return interp_obs
 
 def extract_mimic_obs_whole_body(qpos, last_qpos, dt=1/30):
-    """Extract whole body mimic observations from robot joint positions (35 dims)"""
+    """Extract whole body mimic observations from robot joint positions."""
     root_pos, last_root_pos = qpos[0:3], last_qpos[0:3]
     root_quat, last_root_quat = qpos[3:7], last_qpos[3:7]
     robot_joints = qpos[7:].copy()  # Make a copy to avoid modifying original
@@ -91,7 +91,7 @@ def extract_mimic_obs_whole_body(qpos, last_qpos, dt=1/30):
     base_vel_local = quat_rotate_inverse_np(root_quat, base_vel, scalar_first=True)
     base_ang_vel_local = quat_rotate_inverse_np(root_quat, base_ang_vel, scalar_first=True)
     
-    # Standard mimic observation (35 dims)
+    # Standard mimic observation: 6 base terms + robot joint positions.
     height = root_pos[2:3]
     # print("height: ", height)
     mimic_obs = np.concatenate([
@@ -276,6 +276,9 @@ class StateMachine:
     
     def get_hand_pose(self, robot_name):
         """Get interpolated hand poses based on current hand positions"""
+        if robot_name not in DEFAULT_HAND_POSE:
+            return None, None
+
         use_pinch = self.use_pinch
         # Get open and closed poses
         
@@ -285,19 +288,31 @@ class StateMachine:
             right_open = DEFAULT_HAND_POSE[robot_name]['right']['open']
             right_closed = DEFAULT_HAND_POSE[robot_name]['right']['close']
         else:
-            left_fully_open = DEFAULT_HAND_POSE[robot_name]['left']['open_pinch']
-            left_fully_closed = DEFAULT_HAND_POSE[robot_name]['left']['close_pinch']
-            right_fully_open = DEFAULT_HAND_POSE[robot_name]['right']['open_pinch']
-            right_fully_closed = DEFAULT_HAND_POSE[robot_name]['right']['close_pinch']
+            hand_cfg = DEFAULT_HAND_POSE[robot_name]
+            if (
+                'open_pinch' not in hand_cfg['left']
+                or 'close_pinch' not in hand_cfg['left']
+                or 'open_pinch' not in hand_cfg['right']
+                or 'close_pinch' not in hand_cfg['right']
+            ):
+                left_open = hand_cfg['left']['open']
+                left_closed = hand_cfg['left']['close']
+                right_open = hand_cfg['right']['open']
+                right_closed = hand_cfg['right']['close']
+            else:
+                left_fully_open = hand_cfg['left']['open_pinch']
+                left_fully_closed = hand_cfg['left']['close_pinch']
+                right_fully_open = hand_cfg['right']['open_pinch']
+                right_fully_closed = hand_cfg['right']['close_pinch']
 
-            # compute the intermediate poses to shortern the distance betwen open and close
-            # ratio * open + (1 - ratio) * closed
-            ratio_open = 0.8
-            ratio_closed = 0.0
-            left_open =  left_fully_open * ratio_open + (1 - ratio_open) * left_fully_closed
-            left_closed = left_fully_open * ratio_closed + (1 - ratio_closed) * left_fully_closed
-            right_open = right_fully_open * ratio_open + (1 - ratio_open) * right_fully_closed
-            right_closed = right_fully_open * ratio_closed + (1 - ratio_closed) * right_fully_closed
+                # compute the intermediate poses to shorten the distance between open and close
+                # ratio * open + (1 - ratio) * closed
+                ratio_open = 0.8
+                ratio_closed = 0.0
+                left_open =  left_fully_open * ratio_open + (1 - ratio_open) * left_fully_closed
+                left_closed = left_fully_open * ratio_closed + (1 - ratio_closed) * left_fully_closed
+                right_open = right_fully_open * ratio_open + (1 - ratio_open) * right_fully_closed
+                right_closed = right_fully_open * ratio_closed + (1 - ratio_closed) * right_fully_closed
         
         # Interpolate between open and closed poses
         left_pose = left_open + (left_closed - left_open) * self.hand_left_position
@@ -399,6 +414,18 @@ class XRobotTeleopToRobot:
             expected_fps=self.target_fps,
             name="Teleop Loop"
         )
+        self.default_mimic_obs = np.array(DEFAULT_MIMIC_OBS[self.robot_name], dtype=float)
+        self.mimic_obs_dim = len(self.default_mimic_obs)
+        self.body_action_key = self._resolve_action_key("action_body")
+        self.hand_left_action_key = self._resolve_action_key("action_hand_left")
+        self.hand_right_action_key = self._resolve_action_key("action_hand_right")
+        self.neck_action_key = self._resolve_action_key("action_neck")
+
+    def _resolve_action_key(self, prefix):
+        # Keep backward compatibility with the existing G1 consumer keys.
+        if self.robot_name in ["unitree_g1", "unitree_g1_with_hands"]:
+            return f"{prefix}_unitree_g1_with_hands"
+        return f"{prefix}_{self.robot_name}"
 
 
     def setup_teleop_data_streamer(self):
@@ -416,9 +443,17 @@ class XRobotTeleopToRobot:
 
     def setup_retargeting_system(self):
         """Initialize the motion retargeting system"""
+        target_robot = self.robot_name
+        if self.robot_name not in IK_CONFIG_DICT["xrobot"]:
+            target_robot = "unitree_g1"
+            print(
+                f"[yellow]xrobot IK config for {self.robot_name} not found. "
+                f"Fallback to {target_robot}.[/yellow]"
+            )
+
         self.retarget = GMR(
             src_human="xrobot",
-            tgt_robot="unitree_g1",
+            tgt_robot=target_robot,
             actual_human_height=self.args.actual_human_height,
         )
         print("Retargeting system initialized")
@@ -472,7 +507,7 @@ class XRobotTeleopToRobot:
         if self.last_qpos is not None:
             current_retarget_obs = extract_mimic_obs_whole_body(qpos, self.last_qpos, dt=self.measured_dt)
         else:
-            current_retarget_obs = DEFAULT_MIMIC_OBS[self.robot_name]
+            current_retarget_obs = self.default_mimic_obs
         
         self.last_qpos = qpos.copy()
         return qpos, current_retarget_obs
@@ -539,14 +574,14 @@ class XRobotTeleopToRobot:
 
         if previous_state == "idle":
             if current_retarget_obs is not None:
-                default_obs = DEFAULT_MIMIC_OBS[self.robot_name]
-                start_interpolation(self.state_machine, default_obs, current_retarget_obs[:35])
+                default_obs = self.default_mimic_obs
+                start_interpolation(self.state_machine, default_obs, current_retarget_obs[:self.mimic_obs_dim])
                 print("Interpolating from default to teleop...")
         elif previous_state == "pause":
             if (current_retarget_obs is not None and
                 self.state_machine.last_mimic_obs is not None):
-                last_obs_35d = self.state_machine.last_mimic_obs[:35] if len(self.state_machine.last_mimic_obs) > 35 else self.state_machine.last_mimic_obs
-                start_interpolation(self.state_machine, last_obs_35d, current_retarget_obs[:35])
+                last_obs = self.state_machine.last_mimic_obs[:self.mimic_obs_dim] if len(self.state_machine.last_mimic_obs) > self.mimic_obs_dim else self.state_machine.last_mimic_obs
+                start_interpolation(self.state_machine, last_obs, current_retarget_obs[:self.mimic_obs_dim])
                 print("Interpolating from pause to teleop...")
     def _handle_enter_pause(self):
         """Handle entering pause state"""
@@ -562,17 +597,17 @@ class XRobotTeleopToRobot:
         current_state = self.state_machine.get_current_state()
 
         if current_state == "idle":
-            obs = DEFAULT_MIMIC_OBS[self.robot_name]
+            obs = self.default_mimic_obs
         elif current_state == "pause":
             if self.state_machine.last_mimic_obs is not None:
-                obs = self.state_machine.last_mimic_obs[:35] if len(self.state_machine.last_mimic_obs) > 35 else self.state_machine.last_mimic_obs
+                obs = self.state_machine.last_mimic_obs[:self.mimic_obs_dim] if len(self.state_machine.last_mimic_obs) > self.mimic_obs_dim else self.state_machine.last_mimic_obs
             else:
-                obs = DEFAULT_MIMIC_OBS[self.robot_name]
+                obs = self.default_mimic_obs
         elif current_state == "teleop":
             obs = self._get_teleop_mimic_obs(current_retarget_obs)
             obs = self.state_machine.apply_smooth(obs)
         else:
-            obs = DEFAULT_MIMIC_OBS[self.robot_name]
+            obs = self.default_mimic_obs
 
         return obs
         
@@ -583,14 +618,14 @@ class XRobotTeleopToRobot:
             if interp_obs is not None:
                 self.state_machine.set_current_mimic_obs(interp_obs)
                 return interp_obs
-            return DEFAULT_MIMIC_OBS[self.robot_name]
+            return self.default_mimic_obs
 
         if current_retarget_obs is not None:
-            obs_35d = current_retarget_obs[:35] if len(current_retarget_obs) > 35 else current_retarget_obs
-            self.state_machine.set_current_mimic_obs(obs_35d)
-            return obs_35d
+            obs = current_retarget_obs[:self.mimic_obs_dim] if len(current_retarget_obs) > self.mimic_obs_dim else current_retarget_obs
+            self.state_machine.set_current_mimic_obs(obs)
+            return obs
 
-        return DEFAULT_MIMIC_OBS[self.robot_name]
+        return self.default_mimic_obs
     
     def determine_neck_data_to_send(self, smplx_data):
         """Determine which neck data to send based on current state"""
@@ -622,20 +657,19 @@ class XRobotTeleopToRobot:
         """Send mimic observations to Redis"""
         
         if self.redis_client is not None and mimic_obs is not None:
-            # Expect 35D mimic observations
-            assert len(mimic_obs) == 35, f"Expected 35 mimic obs dims, got {len(mimic_obs)}"
-            # Send to both keys for compatibility
-            self.redis_pipeline.set("action_body_unitree_g1_with_hands", json.dumps(mimic_obs.tolist()))
+            assert len(mimic_obs) == self.mimic_obs_dim, f"Expected {self.mimic_obs_dim} mimic obs dims, got {len(mimic_obs)}"
+            self.redis_pipeline.set(self.body_action_key, json.dumps(mimic_obs.tolist()))
         
         # Send hand action to redis
         if self.redis_client is not None:
             hand_left_pose, hand_right_pose = self.state_machine.get_hand_pose(self.robot_name)
-            self.redis_pipeline.set("action_hand_left_unitree_g1_with_hands", json.dumps(hand_left_pose.tolist()))
-            self.redis_pipeline.set("action_hand_right_unitree_g1_with_hands", json.dumps(hand_right_pose.tolist()))
+            if hand_left_pose is not None and hand_right_pose is not None:
+                self.redis_pipeline.set(self.hand_left_action_key, json.dumps(hand_left_pose.tolist()))
+                self.redis_pipeline.set(self.hand_right_action_key, json.dumps(hand_right_pose.tolist()))
         
         # Send neck data to redis
         if neck_data is not None:
-            self.redis_pipeline.set("action_neck_unitree_g1_with_hands", json.dumps(neck_data))
+            self.redis_pipeline.set(self.neck_action_key, json.dumps(neck_data))
         
         # Send timestamp to redis
         t_action = int(time.time() * 1000) # current timestamp in ms
@@ -669,8 +703,8 @@ class XRobotTeleopToRobot:
     def handle_exit_sequence(self, viewer):
         """Handle graceful exit with interpolation to default pose"""
         if self.state_machine.current_mimic_obs is not None:
-            default_obs = DEFAULT_MIMIC_OBS[self.robot_name]
-            current_obs = self.state_machine.current_mimic_obs[:35] if len(self.state_machine.current_mimic_obs) > 35 else self.state_machine.current_mimic_obs
+            default_obs = self.default_mimic_obs
+            current_obs = self.state_machine.current_mimic_obs[:self.mimic_obs_dim] if len(self.state_machine.current_mimic_obs) > self.mimic_obs_dim else self.state_machine.current_mimic_obs
             start_interpolation(self.state_machine, current_obs, default_obs)
             print("Interpolating to default pose before exit...")
             
@@ -702,7 +736,7 @@ class XRobotTeleopToRobot:
         print("- Left controller axis_click: Emergency stop - kills sim2real.sh process")
         print("- Left controller axis: Control root xy velocity")
         print("- Right controller axis: Control yaw velocity")
-        print("- Publishes 35-dimensional mimic observations")
+        print(f"- Publishes {self.mimic_obs_dim}-dimensional mimic observations")
         print(f"Starting in state: {self.state_machine.get_current_state()}")
 
         if self.state_machine.enable_smooth:
@@ -778,7 +812,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--robot",
-        choices=["unitree_g1", "unitree_g1_with_hands"],
+        choices=["unitree_g1", "unitree_g1_with_hands", "robros_igris_c_v2"],
         default="unitree_g1",
     )
     parser.add_argument(

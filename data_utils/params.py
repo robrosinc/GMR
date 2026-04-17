@@ -60,10 +60,27 @@ DEFAULT_MIMIC_OBS_TODDY = np.concatenate([
                     ])
                 ])
 
+DEFAULT_MIMIC_OBS_IGRIS_C_V2 = np.concatenate([
+                    np.array([0, 0]),  # xy velocity
+                    np.array([0.96]),  # z position
+                    np.array([0, 0]),  # roll/pitch
+                    np.array([0]),     # yaw angular velocity
+                    # 31 dof (from igris_c_v2.xml initial keyframe)
+                    np.array([
+                        0.0, 0.0, 0.0,      # waist yaw/roll/pitch
+                        -0.1, 0.0, 0.0, 0.3, -0.2, 0.0,  # left leg (6)
+                        -0.1, 0.0, 0.0, 0.3, -0.2, 0.0,  # right leg (6)
+                        0.0, 0.13, 0.0, 0.0, 0.0, 0.0, 0.0,  # left arm (7)
+                        0.0, -0.13, 0.0, 0.0, 0.0, 0.0, 0.0, # right arm (7)
+                        0.0, 0.0  # neck yaw/pitch
+                    ])
+                ])
+
 DEFAULT_MIMIC_OBS = {
     "unitree_g1": DEFAULT_MIMIC_OBS_G1,
     "unitree_g1_mixed_mode": DEFAULT_MIMIC_OBS_G1_MIXED_MODE,
     "unitree_g1_with_hands": DEFAULT_MIMIC_OBS_G1,
+    "robros_igris_c_v2": DEFAULT_MIMIC_OBS_IGRIS_C_V2,
     "booster_t1": DEFAULT_MIMIC_OBS_T1,
     "stanford_toddy": DEFAULT_MIMIC_OBS_TODDY,
 }

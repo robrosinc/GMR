@@ -66,6 +66,7 @@ IK_CONFIG_DICT = {
     
     "xrobot":{
         "unitree_g1": IK_CONFIG_ROOT / "xrobot_to_g1.json",
+        "robros_igris_c_v2": IK_CONFIG_ROOT / "xrobot_to_igris_c_2.json",
     },
     "xsens_mvn": {
         "unitree_g1": IK_CONFIG_ROOT / "xsens_mvn_to_g1.json",
