@@ -26,6 +26,7 @@ import argparse
 import json
 import pathlib
 import os
+import pickle
 import subprocess
 import sys
 import time
@@ -49,6 +50,10 @@ from general_motion_retargeting import XRobotStreamer
 from data_utils.params import DEFAULT_MIMIC_OBS, DEFAULT_HAND_POSE
 from data_utils.rot_utils import euler_from_quaternion_np, quat_diff_np, quat_rotate_inverse_np
 from data_utils.fps_monitor import FPSMonitor
+from general_motion_retargeting.utils.motion_utils import (
+    build_motion_data,
+    get_default_keybody_names,
+)
 
 def start_interpolation(state_machine, start_obs, end_obs, duration=1.0):
     """Start interpolation from start_obs to end_obs over given duration"""
@@ -420,6 +425,20 @@ class XRobotTeleopToRobot:
         self.hand_left_action_key = self._resolve_action_key("action_hand_left")
         self.hand_right_action_key = self._resolve_action_key("action_hand_right")
         self.neck_action_key = self._resolve_action_key("action_neck")
+        self.retarget_robot_name = None
+
+        # Optional motion recording (retargeted qpos -> segmented pkl files)
+        self.enable_motion_save = self.args.save_pkl_dir is not None
+        self.motion_save_dir = pathlib.Path(self.args.save_pkl_dir) if self.enable_motion_save else None
+        self.motion_save_every_n_steps = max(1, self.args.save_pkl_every_n_steps)
+        self.motion_save_prefix = self.args.save_pkl_prefix
+        self.motion_save_fps = max(1e-3, float(self.args.save_pkl_fps))
+        self.motion_chunk_idx = 0
+        self.motion_qpos_buffer = []
+        self.motion_ts_buffer = []
+        self.motion_keybody_names = []
+        self.motion_keybody_ids = []
+        self.motion_mj_data_save = None
 
     def _resolve_action_key(self, prefix):
         # Keep backward compatibility with the existing G1 consumer keys.
@@ -456,7 +475,120 @@ class XRobotTeleopToRobot:
             tgt_robot=target_robot,
             actual_human_height=self.args.actual_human_height,
         )
+        self.retarget_robot_name = target_robot
         print("Retargeting system initialized")
+
+    def setup_motion_recording(self):
+        """Setup optional segmented pkl recording for retargeted motion."""
+        if not self.enable_motion_save:
+            return
+        self.motion_save_dir.mkdir(parents=True, exist_ok=True)
+        self.motion_keybody_names = get_default_keybody_names(self.retarget_robot_name)
+        self.motion_keybody_ids = [
+            self.retarget.robot_body_names[name]
+            for name in self.motion_keybody_names
+            if name in self.retarget.robot_body_names
+        ]
+        self.motion_keybody_names = [
+            name for name in self.motion_keybody_names if name in self.retarget.robot_body_names
+        ]
+        self.motion_mj_data_save = mj.MjData(self.retarget.model)
+        print(
+            f"Motion recording enabled: dir={self.motion_save_dir}, "
+            f"chunk_steps={self.motion_save_every_n_steps}, "
+            f"save_fps={self.motion_save_fps}"
+        )
+
+    def record_motion_frame(self, qpos):
+        """Record one retargeted qpos frame and save chunk when full."""
+        if not self.enable_motion_save or qpos is None:
+            return
+        self.motion_qpos_buffer.append(qpos.copy())
+        self.motion_ts_buffer.append(time.time())
+        if len(self.motion_qpos_buffer) >= self.motion_save_every_n_steps:
+            self.save_motion_chunk(force=False)
+
+    def save_motion_chunk(self, force=False):
+        """Save current motion buffer into a pkl chunk."""
+        if not self.enable_motion_save:
+            return
+        if not self.motion_qpos_buffer:
+            return
+        if not force and len(self.motion_qpos_buffer) < self.motion_save_every_n_steps:
+            return
+
+        qpos_arr = np.asarray(self.motion_qpos_buffer)
+        ts_arr = np.asarray(self.motion_ts_buffer)
+        num_frames = len(qpos_arr)
+        if num_frames == 0:
+            return
+
+        # Estimate real recording FPS from timestamps (for monitoring only).
+        if num_frames >= 2:
+            dt = np.diff(ts_arr)
+            dt = dt[dt > 1e-6]
+            measured_fps = float(1.0 / np.mean(dt)) if len(dt) > 0 else float(self.target_fps)
+        else:
+            measured_fps = float(self.target_fps)
+
+        # Saved motion fps is controlled by CLI option.
+        aligned_fps = self.motion_save_fps
+
+        root_pos = qpos_arr[:, :3]
+        root_rot_wxyz = qpos_arr[:, 3:7]
+        dof_pos = qpos_arr[:, 7:]
+
+        if self.motion_keybody_ids:
+            keybody_pos_samples = []
+            keybody_rot_samples = []
+            for q in qpos_arr:
+                self.motion_mj_data_save.qpos[:] = q
+                mj.mj_forward(self.retarget.model, self.motion_mj_data_save)
+                keybody_pos_samples.append(self.motion_mj_data_save.xpos[self.motion_keybody_ids].copy())
+                keybody_rot_samples.append(self.motion_mj_data_save.xquat[self.motion_keybody_ids].copy())
+            keybody_pos_world = np.stack(keybody_pos_samples)
+            keybody_rot_world_wxyz = np.stack(keybody_rot_samples)
+        else:
+            keybody_pos_world = np.zeros((num_frames, 0, 3))
+            keybody_rot_world_wxyz = np.zeros((num_frames, 0, 4))
+
+        motion_data = build_motion_data(
+            aligned_fps=aligned_fps,
+            root_pos=root_pos,
+            root_rot_wxyz=root_rot_wxyz,
+            dof_pos=dof_pos,
+            keybody_pos_world=keybody_pos_world,
+            keybody_rot_world_wxyz=keybody_rot_world_wxyz,
+            keybody_names=self.motion_keybody_names,
+            local_body_pos=None,
+            local_body_link_body_list=None,
+        )
+        motion_data["record_meta"] = {
+            "source": "xrobot_teleop_to_robot_w_hand",
+            "robot": self.retarget_robot_name,
+            "chunk_idx": self.motion_chunk_idx,
+            "num_frames": num_frames,
+            "record_start_unix": float(ts_arr[0]),
+            "record_end_unix": float(ts_arr[-1]),
+            "target_fps": float(self.target_fps),
+            "saved_fps": float(aligned_fps),
+            "measured_fps": float(measured_fps),
+        }
+
+        save_path = self.motion_save_dir / (
+            f"{self.motion_save_prefix}_{self.retarget_robot_name}_"
+            f"chunk_{self.motion_chunk_idx:04d}_{num_frames}f.pkl"
+        )
+        with open(save_path, "wb") as f:
+            pickle.dump(motion_data, f)
+
+        print(
+            f"[SAVE] {save_path} "
+            f"(frames={num_frames}, saved_fps={aligned_fps:.2f}, measured_fps={measured_fps:.2f})"
+        )
+        self.motion_chunk_idx += 1
+        self.motion_qpos_buffer.clear()
+        self.motion_ts_buffer.clear()
     
     def setup_mujoco_simulation(self):
         """Setup MuJoCo model and data"""
@@ -726,6 +858,7 @@ class XRobotTeleopToRobot:
         self.setup_teleop_data_streamer()
         self.setup_redis_connection()
         self.setup_retargeting_system()
+        self.setup_motion_recording()
         self.setup_mujoco_simulation()
         self.setup_video_recording()
         self.setup_rate_limiter()
@@ -748,6 +881,11 @@ class XRobotTeleopToRobot:
             print(f"- FPS measurement: ENABLED (detailed stats every {self.fps_monitor.detailed_print_interval} steps)")
         else:
             print(f"- FPS measurement: Quick stats only (every {self.fps_monitor.quick_print_interval} steps)")
+        if self.enable_motion_save:
+            print(
+                f"- Retargeted motion save: ENABLED "
+                f"(chunk every {self.motion_save_every_n_steps} steps)"
+            )
 
         print("Ready to receive teleop data.")
 
@@ -784,6 +922,7 @@ class XRobotTeleopToRobot:
                 if smplx_data is not None:
                     qpos, current_retarget_obs = self.process_retargeting(smplx_data)
                     self.update_visualization(qpos, smplx_data, viewer)
+                    self.record_motion_frame(qpos)
                 
                 # Handle state transitions
                 self.handle_state_transitions(current_retarget_obs)
@@ -806,6 +945,9 @@ class XRobotTeleopToRobot:
                 self.fps_monitor.tick()
                 
                 self.rate.sleep()
+
+            # Save remaining frames when viewer exits.
+            self.save_motion_chunk(force=True)
 
 def parse_arguments():
     """Parse command line arguments"""
@@ -866,6 +1008,30 @@ def parse_arguments():
         type=int,
         default=0,
         help="Measure and print detailed FPS statistics (0=disabled, 1=enabled).",
+    )
+    parser.add_argument(
+        "--save_pkl_dir",
+        type=str,
+        default=None,
+        help="Directory to save retargeted motion pkl chunks (disabled if None).",
+    )
+    parser.add_argument(
+        "--save_pkl_every_n_steps",
+        type=int,
+        default=3000,
+        help="Save one pkl chunk every N retargeted frames.",
+    )
+    parser.add_argument(
+        "--save_pkl_prefix",
+        type=str,
+        default="teleop",
+        help="Filename prefix for saved pkl chunks.",
+    )
+    parser.add_argument(
+        "--save_pkl_fps",
+        type=float,
+        default=30.0,
+        help="FPS value stored in saved pkl motion data.",
     )
     return parser.parse_args()
 
