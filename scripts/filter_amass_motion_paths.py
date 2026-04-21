@@ -1,13 +1,14 @@
 import argparse
 import multiprocessing as mp
 import os
+import pickle
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
-DEFAULT_EXCLUDE_PATH_SUBSTRINGS: list[str] = ["sit", "crawl", "fall", "stair", "climb", "chair"]
+DEFAULT_EXCLUDE_PATH_SUBSTRINGS: list[str] = ["sit", "crawl", "fall", "stair", "climb"]
 COM_JOINT_NAME = "pelvis"
 LEFT_FOOT_JOINT_CANDIDATES = ("left_foot", "left_ankle")
 RIGHT_FOOT_JOINT_CANDIDATES = ("right_foot", "right_ankle")
@@ -24,13 +25,24 @@ _WORKER_CONFIG: dict[str, Any] | None = None
 _WORKER_SMPLX_ANALYZER: "SmplxMotionAnalyzer | None" = None
 
 
-def collect_npz_files(input_dir: Path) -> list[Path]:
-    return sorted(path for path in input_dir.rglob("*.npz") if path.is_file())
+def collect_motion_files(input_dir: Path) -> list[Path]:
+    return sorted(path for path in input_dir.rglob("*") if path.is_file() and path.suffix.lower() in {".npz", ".pkl"})
 
 
-def load_npz_data(file_path: Path) -> dict[str, np.ndarray]:
-    with np.load(file_path, allow_pickle=True) as npz:
-        return {key: npz[key] for key in npz.files}
+def load_motion_data(file_path: Path) -> dict[str, Any]:
+    suffix = file_path.suffix.lower()
+    if suffix == ".npz":
+        with np.load(file_path, allow_pickle=True) as npz:
+            return {key: npz[key] for key in npz.files}
+    if suffix == ".pkl":
+        with file_path.open("rb") as handle:
+            payload = pickle.load(handle)
+        if isinstance(payload, np.ndarray) and payload.shape == ():
+            payload = payload.item()
+        if not isinstance(payload, dict):
+            raise TypeError(f"Expected dict payload in .pkl, got: {type(payload).__name__}")
+        return dict(payload)
+    raise ValueError(f"Unsupported file extension: {file_path.suffix}")
 
 
 def _to_scalar(value: Any, default: Any) -> Any:
@@ -48,7 +60,7 @@ def _ensure_2d_pose_array(poses_raw: np.ndarray) -> np.ndarray:
     raise ValueError(f"Invalid poses shape: {poses.shape}")
 
 
-def _extract_pose_blocks_from_npz(npz_data: dict[str, np.ndarray]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _extract_pose_blocks_from_npz(npz_data: dict[str, Any]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     if "root_orient" in npz_data and "pose_body" in npz_data:
         root_orient = np.asarray(npz_data["root_orient"], dtype=np.float32)
         pose_body = np.asarray(npz_data["pose_body"], dtype=np.float32)
@@ -145,7 +157,7 @@ class SmplxMotionAnalyzer:
                 return idx
         return None
 
-    def compute_com_and_foot_points(self, npz_data: dict[str, np.ndarray]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def compute_com_and_foot_points(self, npz_data: dict[str, Any]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         self._ensure_runtime()
         torch = self._torch
         for key in ("trans", "betas"):
@@ -276,7 +288,7 @@ def evaluate_motion_filters(
         raise ValueError("SMPL-X analyzer is required for airborne/com-footline filters.")
 
     try:
-        npz_data = load_npz_data(file_path)
+        npz_data = load_motion_data(file_path)
         com, left_foot, right_foot = smplx_analyzer.compute_com_and_foot_points(npz_data)
     except Exception as exc:
         if cfg["analysis_error_policy"] == "drop":
@@ -421,16 +433,16 @@ def filter_motion_files(
     worker_num_threads: int,
     max_memory_gb: float,
 ) -> tuple[list[str], list[str], int]:
-    npz_files = collect_npz_files(input_dir)
+    motion_files = collect_motion_files(input_dir)
     kept_paths: list[str] = []
     filtered_out_paths: list[str] = []
-    total = len(npz_files)
+    total = len(motion_files)
     if total == 0:
         return kept_paths, filtered_out_paths, 0
 
     num_workers, chunksize = max(1, int(num_workers)), max(1, int(chunksize))
     if num_workers == 1:
-        for file_path in _iter_with_progress(npz_files, total, "Filtering motions", show_progress):
+        for file_path in _iter_with_progress(motion_files, total, "Filtering motions", show_progress):
             out_path_str = to_output_path_str(input_dir, file_path, absolute_paths)
             passed, reason = evaluate_motion_filters(file_path, filter_cfg, smplx_analyzer)
             if passed:
@@ -455,7 +467,7 @@ def filter_motion_files(
         initializer=_init_worker,
         initargs=(worker_cfg,),
     ) as executor:
-        results = executor.map(_process_single_file, (str(path) for path in npz_files), chunksize=chunksize)
+        results = executor.map(_process_single_file, (str(path) for path in motion_files), chunksize=chunksize)
         desc = f"Filtering motions ({num_workers} workers)"
         for out_path_str, passed, reason in _iter_with_progress(results, total, desc, show_progress):
             if passed:
@@ -489,7 +501,7 @@ def _print_runtime_summary(
     output_path: Path,
     filtered_out_output_path: Path,
 ) -> None:
-    print(f"Scanned {scanned_count} .npz files")
+    print(f"Scanned {scanned_count} motion files (.npz/.pkl)")
     print(f"Name filter enabled: {args.enable_name_filter}")
     print(f"Airborne filter enabled: {args.enable_airborne_filter}")
     print(f"COM-footline filter enabled: {args.enable_com_footline_filter}")
@@ -524,8 +536,8 @@ def _add_toggle_arg(parser: argparse.ArgumentParser, name: str, default: bool) -
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Filter .npz motions recursively and save surviving paths to txt.")
-    parser.add_argument("input_dir", type=Path, help="Directory to scan recursively for .npz files.")
+    parser = argparse.ArgumentParser(description="Filter motion files recursively and save surviving paths to txt.")
+    parser.add_argument("input_dir", type=Path, help="Directory to scan recursively for .npz/.pkl files.")
     parser.add_argument("--output_name", type=str, default="filtered_motion_paths.txt", help="Output txt filename or path.")
     parser.add_argument("--filtered_out_output_name", type=str, default="filtered_out_motion_paths.txt", help="Filtered-out txt filename or path.")
     parser.add_argument("--absolute_paths", action="store_true", help="Write absolute paths instead of paths relative to input_dir.")
