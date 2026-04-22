@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 
-DEFAULT_EXCLUDE_PATH_SUBSTRINGS: list[str] = ["sit", "crawl", "fall", "stair", "climb"]
+DEFAULT_EXCLUDE_PATH_SUBSTRINGS: list[str] = ["fall", "stair", "climb"]
 COM_JOINT_NAME = "pelvis"
 LEFT_FOOT_JOINT_CANDIDATES = ("left_foot", "left_ankle")
 RIGHT_FOOT_JOINT_CANDIDATES = ("right_foot", "right_ankle")

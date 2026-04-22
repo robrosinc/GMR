@@ -39,12 +39,42 @@ def check_memory(threshold_gb=10):  # adjust based on your available memory
 HERE = pathlib.Path(__file__).parent
 
 
-def process_file(smplx_file_path, tgt_file_path, tgt_robot, SMPLX_FOLDER, tgt_folder, total_files, verbose=False):
+def _norm_rel(path_str: str) -> str:
+    return path_str.replace("\\", "/").strip()
+
+
+def load_allowed_motion_stems(filtered_motion_paths_file: str | None) -> set[str] | None:
+    if not filtered_motion_paths_file:
+        return None
+    allowed_stems: set[str] = set()
+    with open(filtered_motion_paths_file, "r") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line:
+                continue
+            rel = line.split("|", 1)[0].strip()
+            rel_norm = _norm_rel(rel)
+            stem_norm = _norm_rel(str(pathlib.PurePosixPath(rel_norm).with_suffix("")))
+            allowed_stems.add(stem_norm)
+    print(f"Loaded allowed motions: {len(allowed_stems)} from {filtered_motion_paths_file}")
+    return allowed_stems
+
+
+def build_tgt_file_path(src_file_path: str, src_folder: str, tgt_folder: str) -> str:
+    rel_path = pathlib.Path(os.path.relpath(src_file_path, src_folder))
+    return str(pathlib.Path(tgt_folder) / rel_path.with_suffix(".pkl"))
+
+
+def process_file(smplx_file_path, tgt_file_path, tgt_robot, SMPLX_FOLDER, tgt_folder, total_files, override=False, verbose=False):
     def log_memory(message):
         if verbose:
             process = psutil.Process(os.getpid())
             memory_usage = process.memory_info().rss / (1024 ** 3)  # Convert to GB
             print(f"[MEMORY] {message}: {memory_usage:.2f} GB")
+
+    if os.path.exists(tgt_file_path) and not override:
+        print(f"[SKIP] Already retargeted: {tgt_file_path}")
+        return
     
     # Start memory tracking if verbose
     if verbose:
@@ -211,6 +241,7 @@ def main():
     
     parser.add_argument("--override", default=False, action="store_true")
     parser.add_argument("--num_cpus", default=4, type=int)
+    parser.add_argument("--filtered_motion_paths", type=str, default=None)
     args = parser.parse_args()
     
     # print the total number of cpus and gpus
@@ -219,6 +250,7 @@ def main():
     
     src_folder = args.src_folder
     tgt_folder = args.tgt_folder
+    allowed_motion_stems = load_allowed_motion_stems(args.filtered_motion_paths)
 
     SMPLX_FOLDER = HERE / ".." / "assets" / "body_models"
     hard_motions_folder = HERE / ".." / "assets" / "hard_motions"
@@ -242,16 +274,25 @@ def main():
                 
                 
     args_list = []
+    skipped_not_in_filtered = 0
     for dirpath, _, filenames in os.walk(src_folder):
         for filename in natsorted(filenames):
             if filename.endswith("_stagei.npz"):
                 continue
             if filename.endswith((".pkl", ".npz")):
                 smplx_file_path = os.path.join(dirpath, filename)
-                tgt_file_path = smplx_file_path.replace(src_folder, tgt_folder).replace(".npz", ".pkl")
+                if allowed_motion_stems is not None:
+                    rel_path = _norm_rel(os.path.relpath(smplx_file_path, src_folder))
+                    rel_stem = _norm_rel(str(pathlib.PurePosixPath(rel_path).with_suffix("")))
+                    if rel_stem not in allowed_motion_stems:
+                        skipped_not_in_filtered += 1
+                        continue
+                tgt_file_path = build_tgt_file_path(smplx_file_path, src_folder, tgt_folder)
                 if not os.path.exists(tgt_file_path) or args.override:
                     args_list.append((smplx_file_path, tgt_file_path, args.robot, SMPLX_FOLDER, tgt_folder))
     print("full args_list:", len(args_list))
+    if allowed_motion_stems is not None:
+        print("skipped by filtered_motion_paths:", skipped_not_in_filtered)
     
     # remove hard and infeasible motions
     exclude_file_content = ["BMLrub", "EKUT", "crawl", "_lie", "upstairs", "downstairs"]
@@ -272,7 +313,7 @@ def main():
     total_files = len(args_list)
     print(f"Total number of files to process: {total_files}")
     with mp.Pool(args.num_cpus) as pool:
-        pool.starmap(process_file, [args + (total_files, verbose) for args in args_list])
+        pool.starmap(process_file, [task_args + (total_files, args.override, verbose) for task_args in args_list])
 
     print("Done. Saved to ", tgt_folder)
 

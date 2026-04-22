@@ -13,6 +13,27 @@ from general_motion_retargeting import GeneralMotionRetargeting as GMR
 from rich import print
 
 
+def _norm_rel(path_str):
+    return path_str.replace("\\", "/").strip()
+
+
+def load_allowed_motion_stems(filtered_motion_paths_file):
+    if not filtered_motion_paths_file:
+        return None
+    allowed_stems = set()
+    with open(filtered_motion_paths_file, "r") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line:
+                continue
+            rel = line.split("|", 1)[0].strip()
+            rel_norm = _norm_rel(rel)
+            stem_norm = _norm_rel(str(pathlib.PurePosixPath(rel_norm).with_suffix("")))
+            allowed_stems.add(stem_norm)
+    print(f"Loaded allowed motions: {len(allowed_stems)} from {filtered_motion_paths_file}")
+    return allowed_stems
+
+
 if __name__ == "__main__":
     HERE = pathlib.Path(__file__).parent
 
@@ -46,14 +67,21 @@ if __name__ == "__main__":
         default=30,
         type=int,
     )
+    parser.add_argument(
+        "--filtered_motion_paths",
+        type=str,
+        default=None,
+        help="Optional txt of allowed motion paths. Motions not listed are skipped.",
+    )
 
     args = parser.parse_args()
     
     src_folder = args.src_folder
     tgt_folder = args.tgt_folder
+    allowed_motion_stems = load_allowed_motion_stems(args.filtered_motion_paths)
 
    
-   
+    skipped_not_in_filtered = 0
         
     # walk over all files in src_folder
     for dirpath, _, filenames in os.walk(src_folder):
@@ -63,6 +91,12 @@ if __name__ == "__main__":
                 
             # get the bvh file path
             bvh_file_path = os.path.join(dirpath, filename)
+            if allowed_motion_stems is not None:
+                rel_path = _norm_rel(os.path.relpath(bvh_file_path, src_folder))
+                rel_stem = _norm_rel(str(pathlib.PurePosixPath(rel_path).with_suffix("")))
+                if rel_stem not in allowed_motion_stems:
+                    skipped_not_in_filtered += 1
+                    continue
             
             # get the target file path
             tgt_file_path = bvh_file_path.replace(src_folder, tgt_folder).replace(".bvh", ".pkl")
@@ -82,7 +116,7 @@ if __name__ == "__main__":
             
             # Initialize the retargeting system
             retarget = GMR(
-                src_human="bvh",
+                src_human="bvh_lafan1",
                 tgt_robot=args.robot,
                 actual_human_height=actual_human_height,
             )
@@ -155,4 +189,6 @@ if __name__ == "__main__":
             with open(tgt_file_path, "wb") as f:
                 pickle.dump(motion_data, f)
 
+    if allowed_motion_stems is not None:
+        print("skipped by filtered_motion_paths:", skipped_not_in_filtered)
     print("Done. saved to ", tgt_folder)
