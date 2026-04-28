@@ -228,6 +228,25 @@ def process_file(smplx_file_path, tgt_file_path, tgt_robot, SMPLX_FOLDER, tgt_fo
     gc.collect()
     
 
+def process_file_safe(smplx_file_path, tgt_file_path, tgt_robot, SMPLX_FOLDER, tgt_folder, total_files, override=False, verbose=False):
+    try:
+        process_file(
+            smplx_file_path,
+            tgt_file_path,
+            tgt_robot,
+            SMPLX_FOLDER,
+            tgt_folder,
+            total_files,
+            override,
+            verbose,
+        )
+    except Exception as e:
+        print(f"[ERROR] Failed processing {smplx_file_path}: {e}")
+    finally:
+        torch.cuda.empty_cache()
+        gc.collect()
+
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -313,7 +332,7 @@ def main():
     total_files = len(args_list)
     print(f"Total number of files to process: {total_files}")
     with mp.Pool(args.num_cpus) as pool:
-        pool.starmap(process_file, [task_args + (total_files, args.override, verbose) for task_args in args_list])
+        pool.starmap(process_file_safe, [task_args + (total_files, args.override, verbose) for task_args in args_list])
 
     print("Done. Saved to ", tgt_folder)
 

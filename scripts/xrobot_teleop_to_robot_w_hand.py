@@ -425,7 +425,14 @@ class XRobotTeleopToRobot:
         self.hand_left_action_key = self._resolve_action_key("action_hand_left")
         self.hand_right_action_key = self._resolve_action_key("action_hand_right")
         self.neck_action_key = self._resolve_action_key("action_neck")
+        self.qpos_action_key = self._resolve_action_key("action_qpos")
+        self.dof_pos_action_key = self._resolve_action_key("action_dof_pos")
+        self.retarget_frame_action_key = self._resolve_action_key("action_retarget_frame")
         self.retarget_robot_name = None
+        self.retarget_frame_keybody_names = []
+        self.retarget_frame_keybody_ids = []
+        self.retarget_frame_mj_data = None
+        self.retarget_frame_idx = 0
 
         # Optional motion recording (retargeted qpos -> segmented pkl files)
         self.enable_motion_save = self.args.save_pkl_dir is not None
@@ -476,7 +483,80 @@ class XRobotTeleopToRobot:
             actual_human_height=self.args.actual_human_height,
         )
         self.retarget_robot_name = target_robot
+        self._setup_retarget_frame_export()
         print("Retargeting system initialized")
+
+    def _setup_retarget_frame_export(self):
+        """Prepare keybody context for per-frame pkl-format export."""
+        self.retarget_frame_keybody_names = get_default_keybody_names(self.retarget_robot_name)
+        self.retarget_frame_keybody_ids = [
+            self.retarget.robot_body_names[name]
+            for name in self.retarget_frame_keybody_names
+            if name in self.retarget.robot_body_names
+        ]
+        self.retarget_frame_keybody_names = [
+            name
+            for name in self.retarget_frame_keybody_names
+            if name in self.retarget.robot_body_names
+        ]
+        self.retarget_frame_mj_data = mj.MjData(self.retarget.model)
+
+    @staticmethod
+    def _jsonable(value):
+        if isinstance(value, np.ndarray):
+            return value.tolist()
+        if isinstance(value, np.generic):
+            return value.item()
+        if isinstance(value, dict):
+            return {k: XRobotTeleopToRobot._jsonable(v) for k, v in value.items()}
+        if isinstance(value, (list, tuple)):
+            return [XRobotTeleopToRobot._jsonable(v) for v in value]
+        return value
+
+    def build_retarget_frame_payload(self, qpos):
+        """
+        Build one-frame payload with the same key schema as saved pkl motion_data.
+        """
+        if qpos is None or self.retarget is None:
+            return None
+
+        root_pos = qpos[:3][None, :]
+        root_rot_wxyz = qpos[3:7][None, :]
+        dof_pos = qpos[7:][None, :]
+
+        if self.retarget_frame_keybody_ids:
+            self.retarget_frame_mj_data.qpos[:] = qpos
+            mj.mj_forward(self.retarget.model, self.retarget_frame_mj_data)
+            keybody_pos_world = self.retarget_frame_mj_data.xpos[self.retarget_frame_keybody_ids][
+                None, :, :
+            ].copy()
+            keybody_rot_world_wxyz = self.retarget_frame_mj_data.xquat[
+                self.retarget_frame_keybody_ids
+            ][None, :, :].copy()
+        else:
+            keybody_pos_world = np.zeros((1, 0, 3))
+            keybody_rot_world_wxyz = np.zeros((1, 0, 4))
+
+        motion_data = build_motion_data(
+            aligned_fps=float(self.target_fps),
+            root_pos=root_pos,
+            root_rot_wxyz=root_rot_wxyz,
+            dof_pos=dof_pos,
+            keybody_pos_world=keybody_pos_world,
+            keybody_rot_world_wxyz=keybody_rot_world_wxyz,
+            keybody_names=self.retarget_frame_keybody_names,
+            local_body_pos=None,
+            local_body_link_body_list=None,
+        )
+        motion_data["record_meta"] = {
+            "source": "xrobot_teleop_to_robot_w_hand",
+            "robot": self.retarget_robot_name,
+            "frame_idx": int(self.retarget_frame_idx),
+            "unix_ms": int(time.time() * 1000),
+            "fps": float(self.target_fps),
+        }
+        self.retarget_frame_idx += 1
+        return self._jsonable(motion_data)
 
     def setup_motion_recording(self):
         """Setup optional segmented pkl recording for retargeted motion."""
@@ -784,8 +864,20 @@ class XRobotTeleopToRobot:
         
         # Default fallback
         return [0.0, 0.0]
+
+    def maybe_auto_start_teleop(self, smplx_data):
+        """
+        Auto transition idle -> teleop when body tracking data is available.
+        This matches the script header behavior note.
+        """
+        if smplx_data is None:
+            return
+        if self.state_machine.get_current_state() != "idle":
+            return
+        self.state_machine.state = "teleop"
+        print("Auto-transition: idle -> teleop (motion data detected)")
             
-    def send_to_redis(self, mimic_obs, neck_data=None):
+    def send_to_redis(self, mimic_obs, neck_data=None, qpos=None):
         """Send mimic observations to Redis"""
         
         if self.redis_client is not None and mimic_obs is not None:
@@ -802,6 +894,17 @@ class XRobotTeleopToRobot:
         # Send neck data to redis
         if neck_data is not None:
             self.redis_pipeline.set(self.neck_action_key, json.dumps(neck_data))
+
+        # Send retargeted qpos/dof to redis when available.
+        if qpos is not None:
+            self.redis_pipeline.set(self.qpos_action_key, json.dumps(qpos.tolist()))
+            self.redis_pipeline.set(self.dof_pos_action_key, json.dumps(qpos[7:].tolist()))
+            retarget_frame = self.build_retarget_frame_payload(qpos)
+            if retarget_frame is not None:
+                self.redis_pipeline.set(
+                    self.retarget_frame_action_key,
+                    json.dumps(retarget_frame, separators=(",", ":")),
+                )
         
         # Send timestamp to redis
         t_action = int(time.time() * 1000) # current timestamp in ms
@@ -916,6 +1019,9 @@ class XRobotTeleopToRobot:
                     print("Exit requested via controller")
                     self.handle_exit_sequence(viewer)
                     break
+
+                # Auto-start teleop once motion data appears.
+                self.maybe_auto_start_teleop(smplx_data)
                 
                 # Process retargeting if we have data
                 qpos, current_retarget_obs = None, None
@@ -935,7 +1041,7 @@ class XRobotTeleopToRobot:
                 if neck_data_to_send is not None:
                     self.state_machine.set_current_neck_data(neck_data_to_send)
                 
-                self.send_to_redis(mimic_obs_to_send, neck_data_to_send)
+                self.send_to_redis(mimic_obs_to_send, neck_data_to_send, qpos=qpos)
                 
                 # Update visualization and record video
                 viewer.sync()
