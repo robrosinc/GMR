@@ -47,6 +47,22 @@ def _preview(data: list[float] | None, n: int) -> str:
     return f"[{shown}{suffix}] (len={len(data)})"
 
 
+def _first_frame_full(data: Any) -> str:
+    if not isinstance(data, list) or len(data) == 0:
+        return "None"
+    frame0 = data[0]
+    return _fmt_float_tree(frame0)
+
+
+def _fmt_float_tree(value: Any) -> str:
+    if isinstance(value, list):
+        return "[" + ", ".join(_fmt_float_tree(v) for v in value) + "]"
+    try:
+        return f"{float(value):.2f}"
+    except Exception:
+        return str(value)
+
+
 class RedisRespClient:
     """Tiny Redis RESP client for GET/MGET commands."""
 
@@ -292,16 +308,11 @@ class RedisToRos2Bridge(Node):
             msg.data = self._to_dict_literal_string(retarget_frame)
             self.pub_retarget_frame.publish(msg)
 
-        self._debug_log(body, dof_pos, qpos, left_hand, right_hand, neck, t_action)
+        self._debug_log(retarget_frame, t_action)
 
     def _debug_log(
         self,
-        body: list[float] | None,
-        dof_pos: list[float] | None,
-        qpos: list[float] | None,
-        left_hand: list[float] | None,
-        right_hand: list[float] | None,
-        neck: list[float] | None,
+        retarget_frame: dict[str, Any] | None,
         t_action_ms: int | None,
     ) -> None:
         if self.args.debug_log_sec <= 0:
@@ -310,22 +321,29 @@ class RedisToRos2Bridge(Node):
         if now - self._last_debug_log_time < self.args.debug_log_sec:
             return
 
-        dof = dof_pos
-        if dof is None and body is not None and len(body) >= 6:
-            dof = body[6:]
         age_ms = None
         if t_action_ms is not None:
             age_ms = int(time.time() * 1000) - t_action_ms
 
+        if retarget_frame is None:
+            self.get_logger().info(f"[RETARGET]\n- retarget_frame: None\n- t_action_age_ms: {age_ms}\n")
+            self._last_debug_log_time = now
+            return
+
+        dof_pos = _first_frame_full(retarget_frame.get("dof_pos"))
+        dof_vel = _first_frame_full(retarget_frame.get("dof_vel"))
+        root_vel = _first_frame_full(retarget_frame.get("root_vel"))
+        root_angvel = _first_frame_full(retarget_frame.get("root_angvel"))
+        keybody_pos_local = _first_frame_full(retarget_frame.get("keybody_pos_local"))
+
         self.get_logger().info(
-            "bridge_debug "
-            f"body={_preview(body, self.args.debug_preview_dim)} "
-            f"qpos={_preview(qpos, self.args.debug_preview_dim)} "
-            f"dof={_preview(dof, self.args.debug_preview_dim)} "
-            f"neck={_preview(neck, self.args.debug_preview_dim)} "
-            f"hand_l={_preview(left_hand, self.args.debug_preview_dim)} "
-            f"hand_r={_preview(right_hand, self.args.debug_preview_dim)} "
-            f"t_action_age_ms={age_ms}"
+            "[RETARGET]\n"
+            f"* ref_dof_pos      : {dof_pos}\n"
+            f"* ref_dof_vel      : {dof_vel}\n"
+            f"* ref_local_lin_vel: {root_vel}\n"
+            f"* ref_local_ang_vel: {root_angvel}\n"
+            f"* local_kb_pos     : {keybody_pos_local}\n"
+            f"* t_action_age_ms  : {age_ms}\n"
         )
         self._last_debug_log_time = now
 

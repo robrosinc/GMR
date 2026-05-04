@@ -433,6 +433,8 @@ class XRobotTeleopToRobot:
         self.retarget_frame_keybody_ids = []
         self.retarget_frame_mj_data = None
         self.retarget_frame_idx = 0
+        self.retarget_frame_prev_qpos = None
+        self.retarget_frame_prev_time = None
 
         # Optional motion recording (retargeted qpos -> segmented pkl files)
         self.enable_motion_save = self.args.save_pkl_dir is not None
@@ -548,6 +550,26 @@ class XRobotTeleopToRobot:
             local_body_pos=None,
             local_body_link_body_list=None,
         )
+
+        # Fill velocity terms from previous streamed frame.
+        now = time.time()
+        root_vel = np.zeros((1, 3), dtype=np.float64)
+        root_angvel = np.zeros((1, 3), dtype=np.float64)
+        dof_vel = np.zeros((1, dof_pos.shape[1]), dtype=np.float64)
+        if self.retarget_frame_prev_qpos is not None and self.retarget_frame_prev_time is not None:
+            dt = now - self.retarget_frame_prev_time
+            if dt > 1e-6:
+                prev_qpos = self.retarget_frame_prev_qpos
+                root_vel[0] = (qpos[:3] - prev_qpos[:3]) / dt
+                root_angvel[0] = quat_diff_np(prev_qpos[3:7], qpos[3:7], scalar_first=True) / dt
+                dof_vel[0] = (qpos[7:] - prev_qpos[7:]) / dt
+        motion_data["root_vel"] = root_vel
+        motion_data["root_angvel"] = root_angvel
+        motion_data["dof_vel"] = dof_vel
+
+        self.retarget_frame_prev_qpos = qpos.copy()
+        self.retarget_frame_prev_time = now
+
         motion_data["record_meta"] = {
             "source": "xrobot_teleop_to_robot_w_hand",
             "robot": self.retarget_robot_name,
