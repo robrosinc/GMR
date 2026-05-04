@@ -52,9 +52,20 @@ python script/pack_retargeted_motions.py --<dir>
 * 디렉토리 내 모든 single motion pkl 들을 하나의 pkl 로 패킹
 
 
+# PICO Tele-op Retargeting Setup
+1. Xrobo toolkit PC 실행
+2. PICO 헤드셋, 트래커 올바르게 착용
+3. 헤드셋에서 캘리브레이션
+4. 헤드셋에서 xrobo third party app 실행 및 연결
+5. GMR teleop 스크립트 실행
+
 # PICO Tele-op
-* Xrobo toolkit PC 실행
-* PICO 헤드셋, 트래커 올바르게 착용
-* 헤드셋에서 캘리브레이션
-* 헤드셋에서 xrobo third party app 실행 및 연결
-* GMR teleop 스크립트 실행
+1. PICO setup
+2. GMR teleop 스크립트 실행
+```python
+python script/pack_retargeted_motions.py --<dir>
+```
+3. ros topic publish 스크립트 실행
+```python
+PYTHON_BIN=/usr/bin/python3 bash scripts/run_ros2_redis_bridge.sh
+```
