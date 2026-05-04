@@ -50,6 +50,49 @@ def resolve_output_path(input_dir: Path, output_name: str) -> Path:
     return input_dir / output_path
 
 
+def is_single_motion_dict(obj: Any) -> bool:
+    if not isinstance(obj, dict):
+        return False
+    required_keys = {"fps", "root_pos", "root_rot", "dof_pos"}
+    return required_keys.issubset(obj.keys())
+
+
+def _join_clip_name(prefix: str, suffix: str) -> str:
+    if not prefix:
+        return suffix
+    if not suffix:
+        return prefix
+    return f"{prefix}/{suffix}"
+
+
+def flatten_motion_payload(payload: Any, base_clip_name: str) -> dict[str, Any]:
+    flat: dict[str, Any] = {}
+
+    def _walk(node: Any, clip_name: str) -> None:
+        if is_single_motion_dict(node):
+            if clip_name in flat:
+                raise ValueError(f"Duplicate clip name detected while flattening: {clip_name}")
+            flat[clip_name] = node
+            return
+
+        if isinstance(node, dict):
+            if not node:
+                if clip_name in flat:
+                    raise ValueError(f"Duplicate clip name detected while flattening: {clip_name}")
+                flat[clip_name] = node
+                return
+            for sub_key, sub_val in node.items():
+                _walk(sub_val, _join_clip_name(clip_name, str(sub_key)))
+            return
+
+        if clip_name in flat:
+            raise ValueError(f"Duplicate clip name detected while flattening: {clip_name}")
+        flat[clip_name] = node
+
+    _walk(payload, base_clip_name)
+    return flat
+
+
 def pack_motions(input_dir: Path, output_path: Path) -> tuple[int, Path]:
     pkl_files = collect_pkl_files(input_dir)
     output_abs = output_path.resolve()
@@ -59,7 +102,12 @@ def pack_motions(input_dir: Path, output_path: Path) -> tuple[int, Path]:
         if file_path.resolve() == output_abs:
             continue
         clip_name = build_clip_name(input_dir, file_path)
-        packed[clip_name] = safe_load_pickle(file_path)
+        payload = safe_load_pickle(file_path)
+        flat_payload = flatten_motion_payload(payload, clip_name)
+        for flat_clip_name, flat_clip_data in flat_payload.items():
+            if flat_clip_name in packed:
+                raise ValueError(f"Duplicate clip name detected across files: {flat_clip_name}")
+            packed[flat_clip_name] = flat_clip_data
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with output_path.open("wb") as f:
