@@ -188,6 +188,9 @@ class RedisToRos2Bridge(Node):
         self.pub_root_rot = self.create_publisher(
             Float64MultiArray, _topic(args.topic_prefix, "root_rot"), qos_depth
         )
+        self.pub_root_height = self.create_publisher(
+            Float64MultiArray, _topic(args.topic_prefix, "root_height"), qos_depth
+        )
         self.pub_dof_pos = self.create_publisher(
             Float64MultiArray, _topic(args.topic_prefix, "dof_pos"), qos_depth
         )
@@ -293,16 +296,30 @@ class RedisToRos2Bridge(Node):
             self.pub_t_action.publish(tmsg)
             self._check_staleness(t_action)
 
+        root_pos = self._extract_first_frame_vec(retarget_frame, "root_pos", 3)
+        root_rot = self._extract_first_frame_vec(retarget_frame, "root_rot", 4)
         if qpos is not None:
             self.pub_qpos.publish(_to_multiarray(qpos))
             if len(qpos) >= 7:
-                self.pub_root_pos.publish(_to_multiarray(qpos[:3]))
-                self.pub_root_rot.publish(_to_multiarray(qpos[3:7]))
+                if root_pos is None:
+                    root_pos = qpos[:3]
+                if root_rot is None:
+                    root_rot = qpos[3:7]
                 if dof_pos is None:
                     self.pub_dof_pos.publish(_to_multiarray(qpos[7:]))
 
+        if root_pos is not None:
+            self.pub_root_pos.publish(_to_multiarray(root_pos))
+            self.pub_root_height.publish(_to_multiarray([root_pos[2]]))
+        if root_rot is not None:
+            self.pub_root_rot.publish(_to_multiarray(root_rot))
+
         if retarget_frame is None and qpos is not None and len(qpos) >= 7:
             retarget_frame = self._build_fallback_retarget_frame(qpos)
+        if retarget_frame is not None and "root_height" not in retarget_frame:
+            root_height = self._extract_root_height(retarget_frame)
+            if root_height is not None:
+                retarget_frame["root_height"] = root_height
         if retarget_frame is not None:
             msg = String()
             msg.data = self._to_dict_literal_string(retarget_frame)
@@ -332,6 +349,12 @@ class RedisToRos2Bridge(Node):
 
         dof_pos = _first_frame_full(retarget_frame.get("dof_pos"))
         dof_vel = _first_frame_full(retarget_frame.get("dof_vel"))
+        root_rot = _first_frame_full(retarget_frame.get("root_rot"))
+        root_height = retarget_frame.get("root_height")
+        try:
+            root_height_str = f"{float(root_height):.3f}" if root_height is not None else "None"
+        except Exception:
+            root_height_str = "None"
         root_vel = _first_frame_full(retarget_frame.get("root_vel"))
         root_angvel = _first_frame_full(retarget_frame.get("root_angvel"))
         keybody_pos_local = _first_frame_full(retarget_frame.get("keybody_pos_local"))
@@ -340,6 +363,8 @@ class RedisToRos2Bridge(Node):
             "[RETARGET]\n"
             f"* ref_dof_pos      : {dof_pos}\n"
             f"* ref_dof_vel      : {dof_vel}\n"
+            f"* ref_root_rot     : {root_rot}\n"
+            f"* root_height      : {root_height_str}\n"
             f"* ref_local_lin_vel: {root_vel}\n"
             f"* ref_local_ang_vel: {root_angvel}\n"
             f"* local_kb_pos     : {keybody_pos_local}\n"
@@ -398,6 +423,37 @@ class RedisToRos2Bridge(Node):
         return None
 
     @staticmethod
+    def _extract_first_frame_vec(
+        payload: dict[str, Any] | None, key: str, expected_dim: int
+    ) -> list[float] | None:
+        if payload is None:
+            return None
+        value = payload.get(key)
+        if not isinstance(value, list) or len(value) == 0:
+            return None
+        frame0 = value[0]
+        if isinstance(frame0, list):
+            vec = frame0
+        else:
+            vec = value
+        if len(vec) < expected_dim:
+            return None
+        out = []
+        for i in range(expected_dim):
+            try:
+                out.append(float(vec[i]))
+            except Exception:
+                return None
+        return out
+
+    @staticmethod
+    def _extract_root_height(payload: dict[str, Any] | None) -> float | None:
+        root_pos = RedisToRos2Bridge._extract_first_frame_vec(payload, "root_pos", 3)
+        if root_pos is None:
+            return None
+        return float(root_pos[2])
+
+    @staticmethod
     def _to_dict_literal_string(payload: dict[str, Any]) -> str:
         # Publish as Python dict literal style:
         # data: {'fps': ..., 'root_pos': ...}
@@ -410,6 +466,7 @@ class RedisToRos2Bridge(Node):
             "fps": float(self.args.poll_hz),
             "root_pos": [qpos[:3]],
             "root_rot": [qpos[3:7]],
+            "root_height": float(qpos[2]),
             "root_vel": [[0.0, 0.0, 0.0]],
             "root_angvel": [[0.0, 0.0, 0.0]],
             "dof_pos": [dof],
