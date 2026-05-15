@@ -4,7 +4,7 @@ sudo ufw disable
 python xrobot_teleop_to_robot_w_hand.py --robot unitree_g1
 
 State Machine Controls:
-- Right controller key_one: Cycle through idle -> teleop -> pause -> teleop...
+- Right controller key_two: Cycle through idle -> teleop -> pause -> teleop...
 - Left controller key_one: Exit program from any state
 - Left controller axis_click: Emergency stop - kills sim2real.sh process
 - Left controller axis: Control root xy velocity and yaw velocity
@@ -27,6 +27,7 @@ import json
 import pathlib
 import os
 import pickle
+import re
 import subprocess
 import sys
 import time
@@ -120,6 +121,7 @@ class StateMachine:
         self.state = "idle"
         self.previous_state = "idle"
         self.right_key_one_was_pressed = False
+        self.right_key_two_was_pressed = False
         self.left_key_one_was_pressed = False
         self.left_axis_click_was_pressed = False
         # Interpolation state
@@ -155,6 +157,7 @@ class StateMachine:
         
         # Get current button states
         right_key_current = controller_data.get('RightController', {}).get('key_one', False)
+        right_key_two_current = controller_data.get('RightController', {}).get('key_two', False)
         left_key_current = controller_data.get('LeftController', {}).get('key_one', False)
         
         # Hand control - index_trig for close, grip for open
@@ -168,6 +171,7 @@ class StateMachine:
 
         # Detect button presses
         right_key_just_pressed = right_key_current and not self.right_key_one_was_pressed
+        right_key_two_just_pressed = right_key_two_current and not self.right_key_two_was_pressed
         left_key_just_pressed = left_key_current and not self.left_key_one_was_pressed
         left_axis_click_just_pressed = left_axis_click_current and not self.left_axis_click_was_pressed
 
@@ -179,15 +183,15 @@ class StateMachine:
         if left_key_just_pressed:
             self.state = "exit"
 
-        # Handle right key press - cycle between idle, teleop, pause
-        elif right_key_just_pressed:
+        # Handle right key_two press - cycle between idle, teleop, pause
+        elif right_key_two_just_pressed:
             if self.state == "idle":
                 self.state = "teleop"
             elif self.state == "teleop":
                 self.state = "pause"
             elif self.state == "pause":
                 self.state = "teleop"
-
+        
         # Handle hand control - continuous interpolation
         # Right hand control
         if right_index_trig_current:  # Close right hand
@@ -218,6 +222,7 @@ class StateMachine:
         
         # Update button state tracking
         self.right_key_one_was_pressed = right_key_current
+        self.right_key_two_was_pressed = right_key_two_current
         self.left_key_one_was_pressed = left_key_current
         self.left_axis_click_was_pressed = left_axis_click_current
     
@@ -437,12 +442,16 @@ class XRobotTeleopToRobot:
         self.retarget_frame_prev_time = None
 
         # Optional motion recording (retargeted qpos -> segmented pkl files)
-        self.enable_motion_save = self.args.save_pkl_dir is not None
+        self.enable_motion_save = bool(self.args.save_pkl_enabled) and (self.args.save_pkl_dir is not None)
         self.motion_save_dir = pathlib.Path(self.args.save_pkl_dir) if self.enable_motion_save else None
         self.motion_save_every_n_steps = max(1, self.args.save_pkl_every_n_steps)
         self.motion_save_prefix = self.args.save_pkl_prefix
         self.motion_save_fps = max(1e-3, float(self.args.save_pkl_fps))
         self.motion_chunk_idx = 0
+        self.motion_collecting = True
+        self.motion_toggle_prev_pressed = False
+        self.motion_toggle_last_time = 0.0
+        self.motion_toggle_debounce_s = 0.35
         self.motion_qpos_buffer = []
         self.motion_ts_buffer = []
         self.motion_keybody_names = []
@@ -595,35 +604,73 @@ class XRobotTeleopToRobot:
             name for name in self.motion_keybody_names if name in self.retarget.robot_body_names
         ]
         self.motion_mj_data_save = mj.MjData(self.retarget.model)
+        self._initialize_motion_chunk_index()
         print(
             f"Motion recording enabled: dir={self.motion_save_dir}, "
-            f"chunk_steps={self.motion_save_every_n_steps}, "
+            f"toggle=RightController.key_one, "
+            f"start_collecting={self.motion_collecting}, "
             f"save_fps={self.motion_save_fps}"
         )
 
+    def _initialize_motion_chunk_index(self):
+        pattern = re.compile(rf"^{re.escape(self.motion_save_prefix)}_(\d+)\.pkl$")
+        max_idx = -1
+        for pkl_path in self.motion_save_dir.glob(f"{self.motion_save_prefix}_*.pkl"):
+            m = pattern.match(pkl_path.name)
+            if m:
+                max_idx = max(max_idx, int(m.group(1)))
+        self.motion_chunk_idx = max_idx + 1
+
+    def update_motion_recording_toggle(self, controller_data):
+        """Toggle recording with RightController.key_one edge + cooldown."""
+        if not self.enable_motion_save:
+            return
+        raw_right_key = controller_data.get("RightController", {}).get("key_one", False)
+        if isinstance(raw_right_key, (int, float)) and not isinstance(raw_right_key, bool):
+            # Some SDKs emit non-bool states (0/1/2...). Any positive value is treated as active.
+            right_key_pressed = (raw_right_key > 0)
+        else:
+            right_key_pressed = bool(raw_right_key)
+        right_key_changed = (right_key_pressed != self.motion_toggle_prev_pressed)
+
+        now = time.monotonic()
+        if right_key_changed and (now - self.motion_toggle_last_time) >= self.motion_toggle_debounce_s:
+            self.motion_toggle_last_time = now
+            self.motion_collecting = not self.motion_collecting
+            if self.motion_collecting:
+                self.motion_qpos_buffer.clear()
+                self.motion_ts_buffer.clear()
+                print("[REC] ON")
+            else:
+                saved = self.save_motion_chunk(force=True)
+                if saved:
+                    print("[REC] OFF -> saved")
+                else:
+                    print("[REC] OFF -> no frames")
+
+        self.motion_toggle_prev_pressed = right_key_pressed
+
     def record_motion_frame(self, qpos):
-        """Record one retargeted qpos frame and save chunk when full."""
-        if not self.enable_motion_save or qpos is None:
+        """Record one retargeted qpos frame while collecting is ON."""
+        if not self.enable_motion_save or not self.motion_collecting or qpos is None:
             return
         self.motion_qpos_buffer.append(qpos.copy())
         self.motion_ts_buffer.append(time.time())
-        if len(self.motion_qpos_buffer) >= self.motion_save_every_n_steps:
-            self.save_motion_chunk(force=False)
 
     def save_motion_chunk(self, force=False):
         """Save current motion buffer into a pkl chunk."""
         if not self.enable_motion_save:
-            return
+            return False
         if not self.motion_qpos_buffer:
-            return
+            return False
         if not force and len(self.motion_qpos_buffer) < self.motion_save_every_n_steps:
-            return
+            return False
 
         qpos_arr = np.asarray(self.motion_qpos_buffer)
         ts_arr = np.asarray(self.motion_ts_buffer)
         num_frames = len(qpos_arr)
         if num_frames == 0:
-            return
+            return False
 
         # Estimate real recording FPS from timestamps (for monitoring only).
         if num_frames >= 2:
@@ -677,10 +724,7 @@ class XRobotTeleopToRobot:
             "measured_fps": float(measured_fps),
         }
 
-        save_path = self.motion_save_dir / (
-            f"{self.motion_save_prefix}_{self.retarget_robot_name}_"
-            f"chunk_{self.motion_chunk_idx:04d}_{num_frames}f.pkl"
-        )
+        save_path = self.motion_save_dir / f"{self.motion_save_prefix}_{self.motion_chunk_idx:04d}.pkl"
         with open(save_path, "wb") as f:
             pickle.dump(motion_data, f)
 
@@ -691,6 +735,7 @@ class XRobotTeleopToRobot:
         self.motion_chunk_idx += 1
         self.motion_qpos_buffer.clear()
         self.motion_ts_buffer.clear()
+        return True
     
     def setup_mujoco_simulation(self):
         """Setup MuJoCo model and data"""
@@ -989,7 +1034,7 @@ class XRobotTeleopToRobot:
         self.setup_rate_limiter()
 
         print("Teleop state machine initialized. Controls:")
-        print("- Right controller key_one: Cycle through idle -> teleop -> pause -> teleop...")
+        print("- Right controller key_two: Cycle through idle -> teleop -> pause -> teleop...")
         print("- Left controller key_one: Exit program")
         print("- Left controller axis_click: Emergency stop - kills sim2real.sh process")
         print("- Left controller axis: Control root xy velocity")
@@ -1009,7 +1054,7 @@ class XRobotTeleopToRobot:
         if self.enable_motion_save:
             print(
                 f"- Retargeted motion save: ENABLED "
-                f"(chunk every {self.motion_save_every_n_steps} steps)"
+                f"(toggle with Right key_one: ON/OFF)"
             )
 
         print("Ready to receive teleop data.")
@@ -1034,6 +1079,7 @@ class XRobotTeleopToRobot:
                 # Update state machine
                 if controller_data is not None:
                     self.state_machine.update(controller_data)
+                    self.update_motion_recording_toggle(controller_data)
                     self.send_controller_data_to_redis(controller_data)
                 
                 # Check if we should exit
@@ -1075,10 +1121,21 @@ class XRobotTeleopToRobot:
                 self.rate.sleep()
 
             # Save remaining frames when viewer exits.
-            self.save_motion_chunk(force=True)
+            if self.motion_collecting:
+                self.save_motion_chunk(force=True)
 
 def parse_arguments():
     """Parse command line arguments"""
+    def str2bool(v):
+        if isinstance(v, bool):
+            return v
+        s = str(v).strip().lower()
+        if s in {"1", "true", "t", "yes", "y", "on"}:
+            return True
+        if s in {"0", "false", "f", "no", "n", "off"}:
+            return False
+        raise argparse.ArgumentTypeError(f"Invalid boolean value: {v}")
+
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--robot",
@@ -1138,10 +1195,16 @@ def parse_arguments():
         help="Measure and print detailed FPS statistics (0=disabled, 1=enabled).",
     )
     parser.add_argument(
+        "--save_pkl_enabled",
+        type=str2bool,
+        default=True,
+        help="Enable/disable teleop pkl saving (true/false).",
+    )
+    parser.add_argument(
         "--save_pkl_dir",
         type=str,
         default=None,
-        help="Directory to save retargeted motion pkl chunks (disabled if None).",
+        help="Directory to save retargeted motion pkl chunks (used when save_pkl_enabled=true).",
     )
     parser.add_argument(
         "--save_pkl_every_n_steps",
@@ -1160,6 +1223,11 @@ def parse_arguments():
         type=float,
         default=30.0,
         help="FPS value stored in saved pkl motion data.",
+    )
+    parser.add_argument(
+        "--save_pkl_toggle_with_right_key_one",
+        action="store_true",
+        help="Reserved option for teleop launcher compatibility.",
     )
     return parser.parse_args()
 
