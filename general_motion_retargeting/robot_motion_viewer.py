@@ -83,6 +83,7 @@ class RobotMotionViewer:
                 robot_type,
                 camera_follow=True,
                 motion_fps=30,
+                root_quat_scalar_first=False,
                 transparent_robot=0,
                 # video recording
                 record_video=False,
@@ -102,6 +103,7 @@ class RobotMotionViewer:
         self.motion_fps = motion_fps
         self.rate_limiter = RateLimiter(frequency=self.motion_fps, warn=False)
         self.camera_follow = camera_follow
+        self.root_quat_scalar_first = root_quat_scalar_first
         self.record_video = record_video
 
 
@@ -171,7 +173,15 @@ class RobotMotionViewer:
         """
         
         self.data.qpos[:3] = root_pos
-        self.data.qpos[3:7] = root_rot # quat need to be scalar first! for mujoco
+        if self.root_quat_scalar_first:
+            self.data.qpos[3:7] = root_rot
+        else:
+            # Convert scalar-last (xyzw) -> scalar-first (wxyz) for MuJoCo qpos.
+            root_rot = np.asarray(root_rot)
+            self.data.qpos[3:7] = np.array(
+                [root_rot[3], root_rot[0], root_rot[1], root_rot[2]],
+                dtype=root_rot.dtype,
+            )
         self.data.qpos[7:] = dof_pos
         
         mj.mj_forward(self.model, self.data)

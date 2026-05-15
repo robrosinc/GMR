@@ -12,11 +12,19 @@ if __name__ == "__main__":
     parser.add_argument("--record_video", action="store_true")
     parser.add_argument("--video_path", type=str, 
                         default="videos/example.mp4")
+    parser.add_argument(
+        "--root_quat_scalar_first",
+        type=str,
+        choices=("true", "false"),
+        default="true",
+        help="Whether input root quaternion is scalar-first (wxyz). true/false",
+    )
                         
     args = parser.parse_args()
     
     robot_type = args.robot
     robot_motion_path = args.robot_motion_path
+    root_quat_scalar_first = args.root_quat_scalar_first == "true"
     
     if not os.path.exists(robot_motion_path):
         raise FileNotFoundError(f"Motion file {robot_motion_path} not found")
@@ -26,6 +34,7 @@ if __name__ == "__main__":
     env = RobotMotionViewer(robot_type=robot_type,
                             motion_fps=motion_fps,
                             camera_follow=False,
+                            root_quat_scalar_first=root_quat_scalar_first,
                             record_video=args.record_video, video_path=args.video_path)
     
     frame_idx = 0

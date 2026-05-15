@@ -99,7 +99,9 @@ if __name__ == "__main__":
                                             motion_fps=aligned_fps,
                                             transparent_robot=0,
                                             record_video=args.record_video,
-                                            video_path=f"videos/{args.robot}_{args.smplx_file.split('/')[-1].split('.')[0]}.mp4",)
+                                            video_path=f"videos/{args.robot}_{args.smplx_file.split('/')[-1].split('.')[0]}.mp4",
+                                            root_quat_scalar_first=True
+                                            )
     
 
     curr_frame = 0

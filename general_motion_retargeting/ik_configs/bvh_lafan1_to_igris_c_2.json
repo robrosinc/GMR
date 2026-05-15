@@ -1,7 +1,7 @@
 {
     "robot_root_name": "base_link",
     "human_root_name": "Hips",
-    "ground_height": 0.0,
+    "ground_height": 0.15,
     "human_height_assumption": 1.6,
     "use_ik_match_table1": true,
     "use_ik_match_table2": true,
@@ -82,43 +82,43 @@
         "Link_Shoulder_Pitch_Left": [
             "LeftArm",
             10,
-            10,
+            100,
             [0.0, 0.0, -0.1],
             [0.5, 0.5, -0.5, -0.5]
         ],
         "Link_Elbow_Pitch_Left": [
             "LeftForeArm",
-            500,
+            100,
             0,
-            [0.0, -0.0, 0.06],
+            [0.0, -0.1, 0.2],
             [0.707, 0.707, 0.0, 0.0]
         ],
-        "Link_Wrist_Yaw_Left": [
+        "Link_Wrist_Roll_Left": [
             "LeftHand",
-            500,
+            100,
             0,
-            [0.0, -0.0, 0.0],
+            [0.2, -0.1, 0.0],
             [0.707, 0.707, 0.0, 0.0]
         ],
         "Link_Shoulder_Pitch_Right": [
             "RightArm",
             10,
-            10,
+            100,
             [0.0, 0.0, -0.1],
             [0.5, 0.5, -0.5, -0.5]
         ],
         "Link_Elbow_Pitch_Right": [
             "RightForeArm",
-            500,
+            100,
             0,
-            [0.0, 0.0, 0.06],
+            [0.0, 0.1, 0.2],
             [0.707, 0.707, 0.0, 0.0]
         ],
-        "Link_Wrist_Yaw_Right": [
+        "Link_Wrist_Roll_Right": [
             "RightHand",
-            500,
-            0,
-            [0.0, 0.0, 0.0],
+            100,
+            10,
+            [0.2, 0.1, 0.0],
             [0.707, 0.707, 0.0, 0.0]
         ],
         "Link_Neck_Pitch": [
@@ -189,7 +189,7 @@
         "Link_Shoulder_Pitch_Left": [
             "LeftArm",
             0,
-            0,
+            10,
             [0.0, 0.0, -0.1],
             [0.5, 0.5, -0.5, -0.5]
         ],
@@ -197,20 +197,20 @@
             "LeftForeArm",
             100,
             0,
-            [0.0, -0.0, 0.06],
+            [0.0, -0.1, 0.2],
             [0.707, 0.707, 0.0, 0.0]
         ],
-        "Link_Wrist_Yaw_Left": [
+        "Link_Wrist_Roll_Left": [
             "LeftHand",
             100,
             0,
-            [0.0, -0.0, 0.0],
+            [0.2, -0.1, 0.0],
             [0.707, 0.707, 0.0, 0.0]
         ],
         "Link_Shoulder_Pitch_Right": [
             "RightArm",
             0,
-            0,
+            10,
             [0.0, 0.0, -0.1],
             [0.5, 0.5, -0.5, -0.5]
         ],
@@ -218,14 +218,14 @@
             "RightForeArm",
             100,
             0,
-            [0.0, 0.0, 0.06],
+            [0.0, 0.1, 0.2],
             [0.707, 0.707, 0.0, 0.0]
         ],
-        "Link_Wrist_Yaw_Right": [
+        "Link_Wrist_Roll_Right": [
             "RightHand",
             100,
-            0,
-            [0.0, 0.0, 0.0],
+            10,
+            [0.2, 0.1, 0.0],
             [0.707, 0.707, 0.0, 0.0]
         ],
         "Link_Neck_Pitch": [

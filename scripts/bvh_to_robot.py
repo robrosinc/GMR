@@ -107,6 +107,7 @@ if __name__ == "__main__":
                                             transparent_robot=0,
                                             record_video=args.record_video,
                                             video_path=args.video_path,
+                                            root_quat_scalar_first=True
                                             # video_width=2080,
                                             # video_height=1170
                                             )

@@ -142,8 +142,8 @@ if __name__ == "__main__":
             kinematics_model = KinematicsModel(retarget.xml_file, device=device)
             
             root_pos = qpos_list[:, :3]
-            root_rot = qpos_list[:, 3:7]
-            root_rot[:, [0, 1, 2, 3]] = root_rot[:, [1, 2, 3, 0]]
+            # MuJoCo qpos quaternion is scalar-first (wxyz); keep this ordering in saved motion.
+            root_rot = qpos_list[:, 3:7].copy()
             dof_pos = qpos_list[:, 7:]
             num_frames = root_pos.shape[0]
             
@@ -161,9 +161,11 @@ if __name__ == "__main__":
             HEIGHT_ADJUST = False
             PERFRAME_ADJUST = False
             if HEIGHT_ADJUST:
+                # FK expects scalar-last (xyzw), so convert only for FK usage.
+                root_rot_fk = root_rot[:, [1, 2, 3, 0]]
                 body_pos, _ = kinematics_model.forward_kinematics(
                     torch.from_numpy(root_pos).to(device=device, dtype=torch.float),
-                    torch.from_numpy(root_rot).to(device=device, dtype=torch.float),
+                    torch.from_numpy(root_rot_fk).to(device=device, dtype=torch.float),
                     torch.from_numpy(dof_pos).to(device=device, dtype=torch.float)
                 )
                 ground_offset = 0.00
