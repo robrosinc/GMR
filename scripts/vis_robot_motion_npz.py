@@ -5,7 +5,7 @@ import numpy as np
 from rich import print
 from loop_rate_limiters import RateLimiter
 
-from general_motion_retargeting import RobotMotionViewer
+from general_motion_retargeting import MotionCurationList, RobotMotionViewer
 from vis_controls import (
     create_control_state,
     log_controls_once,
@@ -14,25 +14,11 @@ from vis_controls import (
 )
 
 
-def load_curation_list(curation_path: Path) -> list[str]:
-    if not curation_path.exists():
-        return []
-    seen = set()
-    items = []
-    for line in curation_path.read_text(encoding="utf-8").splitlines():
-        clip_name = line.strip()
-        if not clip_name or clip_name in seen:
-            continue
-        seen.add(clip_name)
-        items.append(clip_name)
-    return items
-
-
-def save_curation_list(curation_path: Path, clip_names: list[str]) -> None:
-    curation_path.parent.mkdir(parents=True, exist_ok=True)
-    with curation_path.open("w", encoding="utf-8") as f:
-        for clip_name in clip_names:
-            f.write(f"{clip_name}\n")
+def resolve_curation_path(curation_txt_path: str) -> Path:
+    curation_path = Path(curation_txt_path)
+    if curation_path.is_absolute():
+        return curation_path
+    return Path(__file__).resolve().parents[1] / curation_path
 
 
 def load_motion_dataset(npz_path: Path):
@@ -100,6 +86,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--robot", type=str, default="robros_igris_c_v2")
     parser.add_argument("--motion_npz_path", type=str, required=True)
+    parser.add_argument("--curation_txt_path", type=str, default="curation.txt")
     parser.add_argument("--no_rate_limit", action="store_true")
     parser.add_argument(
         "--root_quat_scalar_first",
@@ -131,12 +118,8 @@ if __name__ == "__main__":
     log_controls_once(include_curation=True, log_fn=print)
     print(f"Root quat scalar-first: {root_quat_scalar_first}")
     print("Close the MuJoCo window to exit.")
-    curation_path = Path(__file__).resolve().parents[1] / "curation.txt"
-    if not curation_path.exists():
-        curation_path.write_text("", encoding="utf-8")
-    curated_clips = load_curation_list(curation_path)
-    curated_set = set(curated_clips)
-    print(f"Curation file: {curation_path} (loaded {len(curated_clips)} clips)")
+    curation = MotionCurationList(resolve_curation_path(args.curation_txt_path))
+    print(f"Curation file: {curation.path} (loaded {len(curation)} clips)")
 
     viewer = None
     control_state = create_control_state(enable_curation=True)
@@ -224,34 +207,27 @@ if __name__ == "__main__":
             if control_state["curation_action"] is not None:
                 current_clip_name = str(clip_names[active_clip_index])
                 if control_state["curation_action"] == "add":
-                    if current_clip_name in curated_set:
+                    if curation.contains(current_clip_name):
                         print(
                             f"[yellow]Already curated: {current_clip_name} "
-                            f"({len(curated_clips)})[/yellow]"
+                            f"({len(curation)})[/yellow]"
                         )
                     else:
-                        curated_clips.append(current_clip_name)
-                        curated_set.add(current_clip_name)
-                        save_curation_list(curation_path, curated_clips)
+                        curation.add(current_clip_name)
                         print(
                             f"[green]Curated (+): {current_clip_name} "
-                            f"({len(curated_clips)})[/green]"
+                            f"({len(curation)})[/green]"
                         )
                 elif control_state["curation_action"] == "remove":
-                    if current_clip_name in curated_set:
-                        curated_set.remove(current_clip_name)
-                        curated_clips = [
-                            name for name in curated_clips if name != current_clip_name
-                        ]
-                        save_curation_list(curation_path, curated_clips)
+                    if curation.remove(current_clip_name):
                         print(
                             f"[green]Curated (-): {current_clip_name} "
-                            f"({len(curated_clips)})[/green]"
+                            f"({len(curation)})[/green]"
                         )
                     else:
                         print(
                             f"[yellow]Not in curation: {current_clip_name} "
-                            f"({len(curated_clips)})[/yellow]"
+                            f"({len(curation)})[/yellow]"
                         )
                 control_state["curation_action"] = None
 

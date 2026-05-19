@@ -1,5 +1,6 @@
 import os
 import time
+from pathlib import Path
 import mujoco as mj
 import mujoco.viewer as mjv
 import imageio
@@ -8,6 +9,67 @@ from general_motion_retargeting import ROBOT_XML_DICT, ROBOT_BASE_DICT, VIEWER_C
 from loop_rate_limiters import RateLimiter
 import numpy as np
 from rich import print
+
+
+class MotionCurationList:
+    def __init__(self, curation_path):
+        self.path = Path(curation_path)
+        self._items: list[str] = []
+        self._item_set: set[str] = set()
+        self._load()
+
+    def _load(self) -> None:
+        if not self.path.exists():
+            return
+        for line in self.path.read_text(encoding="utf-8").splitlines():
+            item = line.strip()
+            if not item or item in self._item_set:
+                continue
+            self._items.append(item)
+            self._item_set.add(item)
+
+    def _append_line(self, item: str) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        prefix = ""
+        if self.path.exists() and self.path.stat().st_size > 0:
+            with self.path.open("rb") as f:
+                f.seek(-1, os.SEEK_END)
+                if f.read(1) != b"\n":
+                    prefix = "\n"
+        with self.path.open("a", encoding="utf-8") as f:
+            f.write(f"{prefix}{item}\n")
+
+    def _write_all(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with self.path.open("w", encoding="utf-8") as f:
+            for item in self._items:
+                f.write(f"{item}\n")
+
+    @property
+    def items(self) -> list[str]:
+        return list(self._items)
+
+    def __len__(self) -> int:
+        return len(self._items)
+
+    def contains(self, item: str) -> bool:
+        return item in self._item_set
+
+    def add(self, item: str) -> bool:
+        if item in self._item_set:
+            return False
+        self._items.append(item)
+        self._item_set.add(item)
+        self._append_line(item)
+        return True
+
+    def remove(self, item: str) -> bool:
+        if item not in self._item_set:
+            return False
+        self._item_set.remove(item)
+        self._items = [existing for existing in self._items if existing != item]
+        self._write_all()
+        return True
 
 
 def draw_frame(

@@ -5,7 +5,7 @@ from natsort import natsorted
 from rich import print
 from loop_rate_limiters import RateLimiter
 
-from general_motion_retargeting import RobotMotionViewer, load_robot_motion
+from general_motion_retargeting import MotionCurationList, RobotMotionViewer, load_robot_motion
 from vis_controls import (
     create_control_state,
     log_controls_once,
@@ -20,12 +20,20 @@ def collect_motion_files(robot_motion_dir: Path, recursive: bool) -> list[Path]:
     return natsorted(motion_files, key=lambda x: str(x))
 
 
+def resolve_curation_path(curation_txt_path: str) -> Path:
+    curation_path = Path(curation_txt_path)
+    if curation_path.is_absolute():
+        return curation_path
+    return Path(__file__).resolve().parents[1] / curation_path
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--robot", type=str, default="unitree_g1")
     parser.add_argument("--robot_motion_dir", type=str, required=True)
     parser.add_argument("--non_recursive", action="store_true")
     parser.add_argument("--loop", action="store_true")
+    parser.add_argument("--curation_txt_path", type=str, default="curation.txt")
     parser.add_argument("--no_rate_limit", action="store_true")
     parser.add_argument(
         "--root_quat_scalar_first",
@@ -46,14 +54,16 @@ if __name__ == "__main__":
         raise FileNotFoundError(f"No .pkl files found under: {robot_motion_dir}")
 
     print(f"Found {len(motion_files)} motion files in {robot_motion_dir}")
-    log_controls_once(log_fn=print)
+    log_controls_once(include_curation=True, log_fn=print)
     print("Playback speed: 1x")
     print(f"Root quat scalar-first: {root_quat_scalar_first}")
     print("Close the MuJoCo window to exit.")
+    curation = MotionCurationList(resolve_curation_path(args.curation_txt_path))
+    print(f"Curation file: {curation.path} (loaded {len(curation)} clips)")
 
     viewer = None
     should_stop = False
-    control_state = create_control_state()
+    control_state = create_control_state(enable_curation=True)
     clip_index = 0
     frame_idx = 0
 
@@ -77,13 +87,19 @@ if __name__ == "__main__":
                     motion_fps=playback_fps,
                     root_quat_scalar_first=root_quat_scalar_first,
                     camera_follow=False,
-                    key_callback=make_keyboard_callback(control_state, log_fn=print),
+                    key_callback=make_keyboard_callback(
+                        control_state, enable_curation=True, log_fn=print
+                    ),
                 )
             else:
                 viewer.motion_fps = playback_fps
                 viewer.rate_limiter = RateLimiter(frequency=playback_fps, warn=False)
 
             print(f"[{clip_index + 1}/{len(motion_files)}] {motion_path}")
+            try:
+                current_clip_name = str(motion_path.relative_to(robot_motion_dir))
+            except ValueError:
+                current_clip_name = str(motion_path)
             num_frames = len(motion_root_pos)
             while True:
                 if not viewer_alive(viewer):
@@ -95,6 +111,30 @@ if __name__ == "__main__":
                         frequency=viewer.motion_fps, warn=False
                     )
                     control_state["speed_dirty"] = False
+                if control_state["curation_action"] is not None:
+                    if control_state["curation_action"] == "add":
+                        if curation.add(current_clip_name):
+                            print(
+                                f"[green]Curated (+): {current_clip_name} "
+                                f"({len(curation)})[/green]"
+                            )
+                        else:
+                            print(
+                                f"[yellow]Already curated: {current_clip_name} "
+                                f"({len(curation)})[/yellow]"
+                            )
+                    elif control_state["curation_action"] == "remove":
+                        if curation.remove(current_clip_name):
+                            print(
+                                f"[green]Curated (-): {current_clip_name} "
+                                f"({len(curation)})[/green]"
+                            )
+                        else:
+                            print(
+                                f"[yellow]Not in curation: {current_clip_name} "
+                                f"({len(curation)})[/yellow]"
+                            )
+                    control_state["curation_action"] = None
                 viewer.step(
                     motion_root_pos[frame_idx],
                     motion_root_rot[frame_idx],
