@@ -69,3 +69,12 @@ python script/pack_retargeted_motions.py --<dir>
 ```python
 PYTHON_BIN=/usr/bin/python3 bash scripts/run_ros2_redis_bridge.sh
 ```
+
+# Motion View & Curation
+* single motion, directory, single packed motion 선택해서 view 할 수 있음
+
+```bash
+bash scripts/view_motion.sh
+```
+
+* `vis_robot_motion_npz.py` 는 curation 기능 있음

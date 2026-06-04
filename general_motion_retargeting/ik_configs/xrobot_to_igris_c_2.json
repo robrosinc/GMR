@@ -60,7 +60,7 @@
     "Link_Hip_Pitch_Left": [
       "Left_Hip",
       50,
-      10,
+      100,
       [
         0.0,
         0.02,
@@ -75,7 +75,7 @@
     ],
     "Link_Knee_Pitch_Left": [
       "Left_Knee",
-      50,
+      150,
       100,
       [
         0.0,
@@ -108,7 +108,7 @@
     "Link_Ankle_Roll_Left": [
       "Left_Foot",
       100,
-      100,
+      0,
       [
         0.1,
         0.0,
@@ -124,7 +124,7 @@
     "Link_Hip_Pitch_Right": [
       "Right_Hip",
       50,
-      10,
+      100,
       [
         0.0,
         -0.02,
@@ -139,7 +139,7 @@
     ],
     "Link_Knee_Pitch_Right": [
       "Right_Knee",
-      50,
+      150,
       100,
       [
         0.0,
@@ -172,7 +172,7 @@
     "Link_Ankle_Roll_Right": [
       "Right_Foot",
       100,
-      100,
+      0,
       [
         0.1,
         -0.0,
@@ -203,8 +203,8 @@
     ],
     "Link_Elbow_Pitch_Left": [
       "Left_Elbow",
-      5,
-      10,
+      50,
+      50,
       [
         0.0,
         0.0,
@@ -251,8 +251,8 @@
     ],
     "Link_Elbow_Pitch_Right": [
       "Right_Elbow",
-      5,
-      10,
+      50,
+      50,
       [
         0.0,
         0.0,
@@ -334,7 +334,7 @@
     "Link_Hip_Pitch_Left": [
       "Left_Hip",
       0,
-      50,
+      100,
       [
         0.0,
         0.1,
@@ -349,7 +349,7 @@
     ],
     "Link_Knee_Pitch_Left": [
       "Left_Knee",
-      150,
+      250,
       50,
       [
         0.0,
@@ -381,11 +381,11 @@
     ],
     "Link_Ankle_Roll_Left": [
       "Left_Foot",
-      100,
+      200,
       100,
       [
         0.02,
-        0.1,
+        0.0,
         -0.0
       ],
       [
@@ -398,7 +398,7 @@
     "Link_Hip_Pitch_Right": [
       "Right_Hip",
       0,
-      50,
+      100,
       [
         0.0,
         -0.1,
@@ -413,7 +413,7 @@
     ],
     "Link_Knee_Pitch_Right": [
       "Right_Knee",
-      150,
+      250,
       50,
       [
         0.0,
@@ -445,11 +445,11 @@
     ],
     "Link_Ankle_Roll_Right": [
       "Right_Foot",
-      100,
+      200,
       100,
       [
         0.02,
-        -0.1,
+        -0.0,
         -0.0
       ],
       [
@@ -461,7 +461,7 @@
     ],
     "Link_Shoulder_Pitch_Left": [
       "Left_Shoulder",
-      0,
+      50,
       0,
       [
         0.0,
@@ -493,8 +493,8 @@
     ],
     "Link_Wrist_Yaw_Left": [
       "Left_Wrist",
+      50,
       10,
-      0,
       [
         0.0,
         0.0,
@@ -509,7 +509,7 @@
     ],
     "Link_Shoulder_Pitch_Right": [
       "Right_Shoulder",
-      0,
+      50,
       0,
       [
         0.0,
@@ -541,8 +541,8 @@
     ],
     "Link_Wrist_Yaw_Right": [
       "Right_Wrist",
+      50,
       10,
-      0,
       [
         0.0,
         0.0,
