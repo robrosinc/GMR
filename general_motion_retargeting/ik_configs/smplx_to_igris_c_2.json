@@ -104,12 +104,12 @@
         ],
         "Link_Elbow_Pitch_Left": [
             "left_elbow",
-            5,
+            50,
             10,
             [0.0, 0.0, 0.06],
             [0.707, 0.0, -0.707, 0.0]
         ],
-        "Link_Wrist_Yaw_Left": [
+        "Link_Wrist_Roll_Left": [
             "left_wrist",
             100,
             10,
@@ -125,12 +125,12 @@
         ],
         "Link_Elbow_Pitch_Right": [
             "right_elbow",
-            5,
+            50,
             10,
             [0.0, 0.0, 0.06],
             [0.0, 0.707, 0.0, 0.707]
         ],
-        "Link_Wrist_Yaw_Right": [
+        "Link_Wrist_Roll_Right": [
             "right_wrist",
             100,
             10,
@@ -219,18 +219,18 @@
         "Link_Shoulder_Pitch_Left": [
             "left_shoulder",
             0,
-            0,
+            100,
             [0.0, 0.0, -0.1],
             [0.707, 0.0, -0.707, 0.0]
         ],
         "Link_Elbow_Pitch_Left": [
             "left_elbow",
-            0,
-            0,
+            50,
+            10,
             [0.0, 0.0, 0.06],
             [0.707, 0.0, -0.707, 0.0]
         ],
-        "Link_Wrist_Yaw_Left": [
+        "Link_Wrist_Roll_Left": [
             "left_wrist",
             10,
             0,
@@ -240,18 +240,18 @@
         "Link_Shoulder_Pitch_Right": [
             "right_shoulder",
             0,
-            0,
+            100,
             [0.0, 0.0, -0.1],
             [0.0, 0.707, 0.0, 0.707]
         ],
         "Link_Elbow_Pitch_Right": [
             "right_elbow",
-            10,
+            50,
             10,
             [0.0, 0.0, 0.06],
             [0.0, 0.707, 0.0, 0.707]
         ],
-        "Link_Wrist_Yaw_Right": [
+        "Link_Wrist_Roll_Right": [
             "right_wrist",
             10,
             0,
