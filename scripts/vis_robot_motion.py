@@ -39,9 +39,9 @@ if __name__ == "__main__":
     
     frame_idx = 0
     while True:
-        env.step(motion_root_pos[frame_idx], 
-                motion_root_rot[frame_idx], 
-                motion_dof_pos[frame_idx], 
+        env.step(motion_root_pos[frame_idx],
+                motion_root_rot[frame_idx],
+                motion_dof_pos[frame_idx],
                 rate_limit=True)
         frame_idx += 1
         if frame_idx >= len(motion_root_pos):

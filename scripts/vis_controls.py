@@ -54,6 +54,7 @@ def controls_help_text(*, include_curation: bool = False) -> str:
         f"[white]* PageUp/PgDn[/white] : multiplier x{MULTIPLIER_SCALE}/div{MULTIPLIER_SCALE} "
         f"(min {MULTIPLIER_MIN}, max {MULTIPLIER_MAX})",
         "[white]* - / =[/white] : playback speed 1/2x, 2x",
+        "[white]* v[/white] : toggle CoM projection",
         "[white]* Space[/white] : pause/resume",
         "[white]* < / >[/white] : prev/next frame (paused only)",
     ]

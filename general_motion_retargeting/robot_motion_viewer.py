@@ -105,6 +105,20 @@ def draw_frame(
         v.user_scn.ngeom += 1
 
 
+def draw_com_projection(com, v, ground_z=0.0, radius=0.045):
+    geom = v.user_scn.geoms[v.user_scn.ngeom]
+    mj.mjv_initGeom(
+        geom,
+        type=mj.mjtGeom.mjGEOM_CYLINDER,
+        size=[radius, 0.004, 0.0],
+        pos=np.array([com[0], com[1], ground_z + 0.004]),
+        mat=np.eye(3).flatten(),
+        rgba=[1.0, 0.75, 0.05, 0.9],
+    )
+    geom.label = "CoM"
+    v.user_scn.ngeom += 1
+
+
 def _install_keyboard_callback(viewer, callback) -> bool:
     """Try to attach a keyboard callback regardless of MuJoCo version."""
     if callback is None:
@@ -167,6 +181,7 @@ class RobotMotionViewer:
         self.camera_follow = camera_follow
         self.root_quat_scalar_first = root_quat_scalar_first
         self.record_video = record_video
+        self.show_com_projection = False
 
 
         viewer_kwargs = dict(
@@ -175,21 +190,26 @@ class RobotMotionViewer:
             show_left_ui=False,
             show_right_ui=False,
         )
+
+        def combined_key_callback(keycode, *args, **kwargs):
+            if keycode in (ord("v"), ord("V")):
+                self.show_com_projection = not self.show_com_projection
+                print(f"[cyan]CoM projection: {self.show_com_projection}[/cyan]")
+            elif key_callback is not None:
+                key_callback(keycode, *args, **kwargs)
+
         keyboard_attached = False
-        if key_callback is not None:
-            try:
-                self.viewer = mjv.launch_passive(
-                    key_callback=key_callback,
-                    **viewer_kwargs,
-                )
-                keyboard_attached = True
-            except TypeError:
-                self.viewer = mjv.launch_passive(**viewer_kwargs)
-        else:
+        try:
+            self.viewer = mjv.launch_passive(
+                key_callback=combined_key_callback,
+                **viewer_kwargs,
+            )
+            keyboard_attached = True
+        except TypeError:
             self.viewer = mjv.launch_passive(**viewer_kwargs)
 
-        if key_callback is not None and not keyboard_attached:
-            keyboard_attached = _install_keyboard_callback(self.viewer, key_callback)
+        if not keyboard_attached:
+            keyboard_attached = _install_keyboard_callback(self.viewer, combined_key_callback)
             if not keyboard_attached:
                 print(
                     "[yellow]RobotMotionViewer: unable to register keyboard callback; key controls disabled.[/yellow]"
@@ -257,9 +277,10 @@ class RobotMotionViewer:
             self.viewer.cam.elevation = -10  # 正面视角，轻微向下看
             # self.viewer.cam.azimuth = 180    # 正面朝向机器人
         
-        if human_motion_data is not None:
-            # Clean custom geometry
+        if human_motion_data is not None or self.show_com_projection or self.viewer.user_scn.ngeom > 0:
             self.viewer.user_scn.ngeom = 0
+
+        if human_motion_data is not None:
             # Draw the task targets for reference
             for human_body_name, (pos, rot) in human_motion_data.items():
                 draw_frame(
@@ -270,6 +291,10 @@ class RobotMotionViewer:
                     pos_offset=human_pos_offset,
                     joint_name=human_body_name if show_human_body_name else None
                     )
+
+        if self.show_com_projection:
+            com = np.sum(self.data.xipos * self.model.body_mass[:, None], axis=0) / np.sum(self.model.body_mass)
+            draw_com_projection(com, self.viewer)
 
         self.viewer.sync()
         if rate_limit is True:
