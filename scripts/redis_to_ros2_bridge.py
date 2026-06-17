@@ -11,30 +11,16 @@ from __future__ import annotations
 
 import argparse
 import ast
+import importlib.util
 import json
+import pathlib
 import socket
 import time
 from typing import Any
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Float64MultiArray, Int64, String
-
-
-def _topic(prefix: str, name: str) -> str:
-    p = prefix.strip() or "/gmr/teleop"
-    if not p.startswith("/"):
-        p = f"/{p}"
-    return f"{p.rstrip('/')}/{name}"
-
-
-def _to_multiarray(data: Any) -> Float64MultiArray:
-    msg = Float64MultiArray()
-    if data is None:
-        msg.data = []
-        return msg
-    msg.data = [float(v) for v in data]
-    return msg
+from std_msgs.msg import String
 
 
 def _preview(data: list[float] | None, n: int) -> str:
@@ -155,58 +141,29 @@ class RedisToRos2Bridge(Node):
 
         suffix = self._resolve_action_suffix(args.robot)
         self.redis_keys = {
-            "body": f"action_body_{suffix}",
-            "hand_left": f"action_hand_left_{suffix}",
-            "hand_right": f"action_hand_right_{suffix}",
-            "neck": f"action_neck_{suffix}",
-            "qpos": f"action_qpos_{suffix}",
             "dof_pos": f"action_dof_pos_{suffix}",
+            "qpos": f"action_qpos_{suffix}",
             "retarget_frame": f"action_retarget_frame_{suffix}",
-            "controller": "controller_data",
             "t_action": "t_action",
+        }
+        self.default_qpos = self._build_default_qpos(args.robot)
+        self.default_retarget_frame = self._build_fallback_retarget_frame(self.default_qpos)
+        self.default_retarget_frame["record_meta"] = {
+            "source": "redis_to_ros2_bridge_default",
+            "robot": args.robot,
+            "unix_ms": int(time.time() * 1000),
+            "default": True,
         }
 
         qos_depth = max(1, int(args.ros_qos_depth))
-        self.pub_body = self.create_publisher(
-            Float64MultiArray, _topic(args.topic_prefix, "action_body"), qos_depth
-        )
-        self.pub_hand_left = self.create_publisher(
-            Float64MultiArray, _topic(args.topic_prefix, "action_hand_left"), qos_depth
-        )
-        self.pub_hand_right = self.create_publisher(
-            Float64MultiArray, _topic(args.topic_prefix, "action_hand_right"), qos_depth
-        )
-        self.pub_neck = self.create_publisher(
-            Float64MultiArray, _topic(args.topic_prefix, "action_neck"), qos_depth
-        )
-        self.pub_qpos = self.create_publisher(
-            Float64MultiArray, _topic(args.topic_prefix, "qpos"), qos_depth
-        )
-        self.pub_root_pos = self.create_publisher(
-            Float64MultiArray, _topic(args.topic_prefix, "root_pos"), qos_depth
-        )
-        self.pub_root_rot = self.create_publisher(
-            Float64MultiArray, _topic(args.topic_prefix, "root_rot"), qos_depth
-        )
-        self.pub_root_height = self.create_publisher(
-            Float64MultiArray, _topic(args.topic_prefix, "root_height"), qos_depth
-        )
-        self.pub_dof_pos = self.create_publisher(
-            Float64MultiArray, _topic(args.topic_prefix, "dof_pos"), qos_depth
-        )
         self.pub_retarget_frame = self.create_publisher(
-            String, _topic(args.topic_prefix, "retarget_frame"), qos_depth
-        )
-        self.pub_controller = self.create_publisher(
-            String, _topic(args.topic_prefix, "controller_data"), qos_depth
-        )
-        self.pub_t_action = self.create_publisher(
-            Int64, _topic(args.topic_prefix, "t_action_ms"), qos_depth
+            String, self._topic(args.topic_prefix, "retarget_frame"), qos_depth
         )
 
         self._last_error_log_time = 0.0
         self._last_stale_log_time = 0.0
         self._last_debug_log_time = 0.0
+        self._last_default_seed_time = 0.0
         period = 1.0 / max(1.0, float(args.poll_hz))
         self.timer = self.create_timer(period, self._tick)
 
@@ -219,12 +176,20 @@ class RedisToRos2Bridge(Node):
             "Redis keys: "
             + ", ".join(f"{k}={v}" for k, v in self.redis_keys.items())
         )
+        self._seed_default_redis_frame(force=True)
 
     @staticmethod
     def _resolve_action_suffix(robot_name: str) -> str:
         if robot_name in ["unitree_g1", "unitree_g1_with_hands"]:
             return "unitree_g1_with_hands"
         return robot_name
+
+    @staticmethod
+    def _topic(prefix: str, name: str) -> str:
+        p = prefix.strip() or "/gmr/teleop"
+        if not p.startswith("/"):
+            p = f"/{p}"
+        return f"{p.rstrip('/')}/{name}"
 
     @staticmethod
     def _decode_bulk(value: Any) -> str | None:
@@ -236,14 +201,8 @@ class RedisToRos2Bridge(Node):
 
     def _tick(self) -> None:
         key_order = [
-            self.redis_keys["body"],
-            self.redis_keys["hand_left"],
-            self.redis_keys["hand_right"],
-            self.redis_keys["neck"],
             self.redis_keys["qpos"],
-            self.redis_keys["dof_pos"],
             self.redis_keys["retarget_frame"],
-            self.redis_keys["controller"],
             self.redis_keys["t_action"],
         ]
         try:
@@ -261,60 +220,18 @@ class RedisToRos2Bridge(Node):
                 self._last_error_log_time = now
 
     def _publish_values(self, values: list[Any]) -> None:
-        body_raw, l_raw, r_raw, neck_raw, qpos_raw, dof_raw, frame_raw, ctrl_raw, t_raw = values
-        body = self._parse_json_list(body_raw)
-        left_hand = self._parse_json_list(l_raw)
-        right_hand = self._parse_json_list(r_raw)
-        neck = self._parse_json_list(neck_raw)
+        qpos_raw, frame_raw, t_raw = values
         qpos = self._parse_json_list(qpos_raw)
-        dof_pos = self._parse_json_list(dof_raw)
         retarget_frame = self._parse_json_dict(frame_raw)
-        controller = self._decode_bulk(ctrl_raw)
         t_action = self._parse_int(t_raw)
 
-        if body is not None:
-            self.pub_body.publish(_to_multiarray(body))
-        if dof_pos is not None:
-            self.pub_dof_pos.publish(_to_multiarray(dof_pos))
-        elif body is not None and len(body) >= 6:
-            # fallback layout: body obs = [base(6), dof...]
-            self.pub_dof_pos.publish(_to_multiarray(body[6:]))
-
-        if left_hand is not None:
-            self.pub_hand_left.publish(_to_multiarray(left_hand))
-        if right_hand is not None:
-            self.pub_hand_right.publish(_to_multiarray(right_hand))
-        if neck is not None:
-            self.pub_neck.publish(_to_multiarray(neck))
-        if controller is not None:
-            msg = String()
-            msg.data = controller
-            self.pub_controller.publish(msg)
         if t_action is not None:
-            tmsg = Int64()
-            tmsg.data = t_action
-            self.pub_t_action.publish(tmsg)
             self._check_staleness(t_action)
 
-        root_pos = self._extract_first_frame_vec(retarget_frame, "root_pos", 3)
-        root_rot = self._extract_first_frame_vec(retarget_frame, "root_rot", 4)
-        if qpos is not None:
-            self.pub_qpos.publish(_to_multiarray(qpos))
-            if len(qpos) >= 7:
-                if root_pos is None:
-                    root_pos = qpos[:3]
-                if root_rot is None:
-                    root_rot = qpos[3:7]
-                if dof_pos is None:
-                    self.pub_dof_pos.publish(_to_multiarray(qpos[7:]))
-
-        if root_pos is not None:
-            self.pub_root_pos.publish(_to_multiarray(root_pos))
-            self.pub_root_height.publish(_to_multiarray([root_pos[2]]))
-        if root_rot is not None:
-            self.pub_root_rot.publish(_to_multiarray(root_rot))
-
-        if retarget_frame is None and qpos is not None and len(qpos) >= 7:
+        if self._is_stale_retarget_frame(retarget_frame, t_action):
+            self._seed_default_redis_frame()
+            retarget_frame = self.default_retarget_frame
+        elif retarget_frame is None and qpos is not None and len(qpos) >= 7:
             retarget_frame = self._build_fallback_retarget_frame(qpos)
         if retarget_frame is not None and "root_height" not in retarget_frame:
             root_height = self._extract_root_height(retarget_frame)
@@ -471,16 +388,80 @@ class RedisToRos2Bridge(Node):
             "root_angvel": [[0.0, 0.0, 0.0]],
             "dof_pos": [dof],
             "dof_vel": [zero_dof],
-            "keybody_pos_world": [],
-            "keybody_pos_local": [],
-            "keybody_rot_world": [],
-            "keybody_rot_local": [],
-            "keybody_pos": [],
+            "keybody_pos_world": [[]],
+            "keybody_pos_local": [[]],
+            "keybody_rot_world": [[]],
+            "keybody_rot_local": [[]],
+            "keybody_pos": [[]],
             "link_body_list": [],
             "local_body_link_body_list": None,
             "local_body_pos": None,
         }
         return frame
+
+    def _seed_default_redis_frame(self, force: bool = False) -> None:
+        now = time.monotonic()
+        if not force and now - self._last_default_seed_time < 1.0:
+            return
+
+        now_ms = int(time.time() * 1000)
+        self.default_retarget_frame["record_meta"]["unix_ms"] = now_ms
+        try:
+            self.client.command(
+                "DEL",
+                self.redis_keys["qpos"],
+                self.redis_keys["dof_pos"],
+                self.redis_keys["retarget_frame"],
+                self.redis_keys["t_action"],
+            )
+            self.client.command("SET", self.redis_keys["qpos"], json.dumps(self.default_qpos))
+            self.client.command("SET", self.redis_keys["dof_pos"], json.dumps(self.default_qpos[7:]))
+            self.client.command(
+                "SET",
+                self.redis_keys["retarget_frame"],
+                json.dumps(self.default_retarget_frame, separators=(",", ":")),
+            )
+            self.client.command("SET", self.redis_keys["t_action"], str(now_ms))
+            self._last_default_seed_time = now
+            if force:
+                self.get_logger().info("Seeded Redis retarget keys with default frame")
+        except Exception as exc:
+            self.client.close()
+            self.get_logger().warning(f"Failed to seed default Redis frame: {exc}")
+
+    @staticmethod
+    def _build_default_qpos(robot_name: str) -> list[float]:
+        params_path = (
+            pathlib.Path(__file__).resolve().parents[1]
+            / "general_motion_retargeting"
+            / "utils"
+            / "params.py"
+        )
+        spec = importlib.util.spec_from_file_location("gmr_default_params", params_path)
+        if spec is None or spec.loader is None:
+            raise RuntimeError(f"Failed to load default params from {params_path}")
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        default_obs = module.DEFAULT_MIMIC_OBS[robot_name].tolist()
+        root_z = float(default_obs[2])
+        dof = [float(v) for v in default_obs[6:]]
+        return [0.0, 0.0, root_z, 1.0, 0.0, 0.0, 0.0] + dof
+
+    def _is_stale_retarget_frame(
+        self,
+        retarget_frame: dict[str, Any] | None,
+        t_action_ms: int | None,
+    ) -> bool:
+        if retarget_frame is None or t_action_ms is None:
+            return False
+        meta = retarget_frame.get("record_meta")
+        if not isinstance(meta, dict) or meta.get("default"):
+            return False
+        frame_unix_ms = self._parse_int(meta.get("unix_ms"))
+        if frame_unix_ms is None:
+            return False
+        return abs(t_action_ms - frame_unix_ms) > self.args.stale_warn_ms
 
     @staticmethod
     def _parse_int(raw: Any) -> int | None:
@@ -510,7 +491,7 @@ def parse_args():
 
     parser.add_argument("--topic_prefix", type=str, default="/gmr/teleop")
     parser.add_argument("--ros_node_name", type=str, default="gmr_redis_ros2_bridge")
-    parser.add_argument("--ros_qos_depth", type=int, default=10)
+    parser.add_argument("--ros_qos_depth", type=int, default=1)
     parser.add_argument("--poll_hz", type=float, default=100.0)
     parser.add_argument("--stale_warn_ms", type=int, default=150)
     parser.add_argument(

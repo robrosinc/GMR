@@ -62,16 +62,16 @@ DEFAULT_MIMIC_OBS_TODDY = np.concatenate([
 
 DEFAULT_MIMIC_OBS_IGRIS_C_V2 = np.concatenate([
                     np.array([0, 0]),  # xy velocity
-                    np.array([0.96]),  # z position
+                    np.array([0.97]),  # z position
                     np.array([0, 0]),  # roll/pitch
                     np.array([0]),     # yaw angular velocity
                     # 31 dof (from igris_c_v2.xml initial keyframe)
                     np.array([
                         0.0, 0.0, 0.0,      # waist yaw/roll/pitch
-                        -0.1, 0.0, 0.0, 0.3, -0.2, 0.0,  # left leg (6)
-                        -0.1, 0.0, 0.0, 0.3, -0.2, 0.0,  # right leg (6)
-                        0.0, 0.13, 0.0, 0.0, 0.0, 0.0, 0.0,  # left arm (7)
-                        0.0, -0.13, 0.0, 0.0, 0.0, 0.0, 0.0, # right arm (7)
+                        -0.1, 0.0, 0.0, 0.0, -0.1, 0.0,  # left leg (6)
+                        -0.1, 0.0, 0.0, 0.0, -0.1, 0.0,  # right leg (6)
+                        0.0, 0.1, 0.0, 0.0, 0.0, 0.0, 0.0,  # left arm (7)
+                        0.0, -0.1, 0.0, 0.0, 0.0, 0.0, 0.0, # right arm (7)
                         0.0, 0.0  # neck yaw/pitch
                     ])
                 ])

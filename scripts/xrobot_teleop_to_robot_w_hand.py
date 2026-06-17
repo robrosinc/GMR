@@ -23,7 +23,6 @@ Whole-Body Teleop Features:
 - Uses retargeted motion directly from the teleoperation stream
 """
 import argparse
-import json
 import pathlib
 import os
 import pickle
@@ -44,13 +43,13 @@ from general_motion_retargeting import human_head_to_robot_neck
 from rich import print
 from tqdm import tqdm
 import cv2
-import redis
 from rich import print
 from general_motion_retargeting import XRobotStreamer
 
-from data_utils.params import DEFAULT_MIMIC_OBS, DEFAULT_HAND_POSE
-from data_utils.rot_utils import euler_from_quaternion_np, quat_diff_np, quat_rotate_inverse_np
-from data_utils.fps_monitor import FPSMonitor
+from general_motion_retargeting.utils.params import DEFAULT_MIMIC_OBS, DEFAULT_HAND_POSE
+from general_motion_retargeting.rot_utils import euler_from_quaternion_np, quat_diff_np, quat_rotate_inverse_np
+from general_motion_retargeting.utils.fps_monitor import FPSMonitor
+from general_motion_retargeting.utils.twist2_redis import Twist2RedisPublisher
 from general_motion_retargeting.utils.motion_utils import (
     build_motion_data,
     get_default_keybody_names,
@@ -401,7 +400,7 @@ class XRobotTeleopToRobot:
 
         # Initialize components
         self.teleop_data_streamer = None
-        self.redis_client = None
+        self.redis_publisher = None
         self.retarget = None
         self.model = None
         self.data = None
@@ -426,13 +425,6 @@ class XRobotTeleopToRobot:
         )
         self.default_mimic_obs = np.array(DEFAULT_MIMIC_OBS[self.robot_name], dtype=float)
         self.mimic_obs_dim = len(self.default_mimic_obs)
-        self.body_action_key = self._resolve_action_key("action_body")
-        self.hand_left_action_key = self._resolve_action_key("action_hand_left")
-        self.hand_right_action_key = self._resolve_action_key("action_hand_right")
-        self.neck_action_key = self._resolve_action_key("action_neck")
-        self.qpos_action_key = self._resolve_action_key("action_qpos")
-        self.dof_pos_action_key = self._resolve_action_key("action_dof_pos")
-        self.retarget_frame_action_key = self._resolve_action_key("action_retarget_frame")
         self.retarget_robot_name = None
         self.retarget_frame_keybody_names = []
         self.retarget_frame_keybody_ids = []
@@ -458,13 +450,6 @@ class XRobotTeleopToRobot:
         self.motion_keybody_ids = []
         self.motion_mj_data_save = None
 
-    def _resolve_action_key(self, prefix):
-        # Keep backward compatibility with the existing G1 consumer keys.
-        if self.robot_name in ["unitree_g1", "unitree_g1_with_hands"]:
-            return f"{prefix}_unitree_g1_with_hands"
-        return f"{prefix}_{self.robot_name}"
-
-
     def setup_teleop_data_streamer(self):
         """Initialize and start the teleop data streamer"""
         self.teleop_data_streamer = XRobotStreamer()
@@ -473,9 +458,7 @@ class XRobotTeleopToRobot:
     def setup_redis_connection(self):
         """Setup Redis connection"""
         redis_ip = self.args.redis_ip
-        self.redis_client = redis.Redis(host=redis_ip, port=6379, db=0)
-        self.redis_pipeline = self.redis_client.pipeline()
-        self.redis_client.ping()
+        self.redis_publisher = Twist2RedisPublisher(redis_ip, self.robot_name)
         print("Redis connected successfully")
 
     def setup_retargeting_system(self):
@@ -946,48 +929,35 @@ class XRobotTeleopToRobot:
             
     def send_to_redis(self, mimic_obs, neck_data=None, qpos=None):
         """Send mimic observations to Redis"""
-        
-        if self.redis_client is not None and mimic_obs is not None:
-            assert len(mimic_obs) == self.mimic_obs_dim, f"Expected {self.mimic_obs_dim} mimic obs dims, got {len(mimic_obs)}"
-            self.redis_pipeline.set(self.body_action_key, json.dumps(mimic_obs.tolist()))
-        
-        # Send hand action to redis
-        if self.redis_client is not None:
-            hand_left_pose, hand_right_pose = self.state_machine.get_hand_pose(self.robot_name)
-            if hand_left_pose is not None and hand_right_pose is not None:
-                self.redis_pipeline.set(self.hand_left_action_key, json.dumps(hand_left_pose.tolist()))
-                self.redis_pipeline.set(self.hand_right_action_key, json.dumps(hand_right_pose.tolist()))
-        
-        # Send neck data to redis
-        if neck_data is not None:
-            self.redis_pipeline.set(self.neck_action_key, json.dumps(neck_data))
+        if self.redis_publisher is None or mimic_obs is None:
+            return
 
-        # Send retargeted qpos/dof to redis when available.
-        if qpos is not None:
-            self.redis_pipeline.set(self.qpos_action_key, json.dumps(qpos.tolist()))
-            self.redis_pipeline.set(self.dof_pos_action_key, json.dumps(qpos[7:].tolist()))
-            retarget_frame = self.build_retarget_frame_payload(qpos)
-            if retarget_frame is not None:
-                self.redis_pipeline.set(
-                    self.retarget_frame_action_key,
-                    json.dumps(retarget_frame, separators=(",", ":")),
-                )
-        
-        # Send timestamp to redis
-        t_action = int(time.time() * 1000) # current timestamp in ms
-        self.redis_pipeline.set("t_action", t_action)
+        assert len(mimic_obs) == self.mimic_obs_dim, (
+            f"Expected {self.mimic_obs_dim} mimic obs dims, got {len(mimic_obs)}"
+        )
 
-        # execute the pipeline once
-        self.redis_pipeline.execute()
+        hand_left_pose, hand_right_pose = self.state_machine.get_hand_pose(self.robot_name)
+        if hand_left_pose is None or hand_right_pose is None:
+            # TWIST2 consumers expect hand action keys to exist even when a target robot
+            # does not use dexterous hands.
+            hand_left_pose = np.zeros(7)
+            hand_right_pose = np.zeros(7)
+
+        retarget_frame = self.build_retarget_frame_payload(qpos) if qpos is not None else None
+        self.redis_publisher.publish_action(
+            body=mimic_obs,
+            hand_left=hand_left_pose,
+            hand_right=hand_right_pose,
+            neck=neck_data,
+            qpos=qpos,
+            retarget_frame=retarget_frame,
+        )
 
     
     def send_controller_data_to_redis(self, controller_data):
         """Send controller data to Redis"""
-        if self.redis_client is not None and controller_data is not None:
-            self.redis_client.set(
-                f"controller_data", 
-                json.dumps(controller_data)
-            )
+        if self.redis_publisher is not None:
+            self.redis_publisher.publish_controller_data(controller_data)
             
             
     def record_video_frame(self, viewer):
