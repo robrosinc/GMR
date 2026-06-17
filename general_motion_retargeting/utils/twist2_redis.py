@@ -110,6 +110,9 @@ class Twist2RedisPublisher:
             return
         self.client.set("controller_data", json_dumps(controller_data))
 
+    def publish_use_recorded_reference(self, enabled: bool) -> None:
+        self.client.set("use_recorded_reference", json_dumps(bool(enabled)))
+
     def publish_action(
         self,
         body: np.ndarray,

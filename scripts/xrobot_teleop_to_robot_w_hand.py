@@ -449,6 +449,10 @@ class XRobotTeleopToRobot:
         self.motion_keybody_names = []
         self.motion_keybody_ids = []
         self.motion_mj_data_save = None
+        self.use_recorded_reference = False
+        self.use_recorded_reference_prev_pressed = False
+        self.use_recorded_reference_last_toggle_time = 0.0
+        self.use_recorded_reference_debounce_s = 0.35
 
     def setup_teleop_data_streamer(self):
         """Initialize and start the teleop data streamer"""
@@ -459,6 +463,7 @@ class XRobotTeleopToRobot:
         """Setup Redis connection"""
         redis_ip = self.args.redis_ip
         self.redis_publisher = Twist2RedisPublisher(redis_ip, self.robot_name)
+        self.redis_publisher.publish_use_recorded_reference(self.use_recorded_reference)
         print("Redis connected successfully")
 
     def setup_retargeting_system(self):
@@ -506,6 +511,13 @@ class XRobotTeleopToRobot:
         if isinstance(value, (list, tuple)):
             return [XRobotTeleopToRobot._jsonable(v) for v in value]
         return value
+
+    @staticmethod
+    def _controller_button_pressed(controller_data, controller_name, button_name):
+        raw_value = controller_data.get(controller_name, {}).get(button_name, False)
+        if isinstance(raw_value, (int, float)) and not isinstance(raw_value, bool):
+            return raw_value > 0
+        return bool(raw_value)
 
     def build_retarget_frame_payload(self, qpos):
         """
@@ -632,6 +644,21 @@ class XRobotTeleopToRobot:
                     print("[REC] OFF -> no frames")
 
         self.motion_toggle_prev_pressed = right_key_pressed
+
+    def update_use_recorded_reference_toggle(self, controller_data):
+        """Toggle recorded-reference mode with the Pico Y button."""
+        y_pressed = self._controller_button_pressed(controller_data, "LeftController", "key_two")
+        y_just_pressed = y_pressed and not self.use_recorded_reference_prev_pressed
+
+        now = time.monotonic()
+        if y_just_pressed and (now - self.use_recorded_reference_last_toggle_time) >= self.use_recorded_reference_debounce_s:
+            self.use_recorded_reference_last_toggle_time = now
+            self.use_recorded_reference = not self.use_recorded_reference
+            if self.redis_publisher is not None:
+                self.redis_publisher.publish_use_recorded_reference(self.use_recorded_reference)
+            print(f"[REF] use_recorded_reference={self.use_recorded_reference}")
+
+        self.use_recorded_reference_prev_pressed = y_pressed
 
     def record_motion_frame(self, qpos):
         """Record one retargeted qpos frame while collecting is ON."""
@@ -1009,6 +1036,7 @@ class XRobotTeleopToRobot:
         print("- Left controller axis_click: Emergency stop - kills sim2real.sh process")
         print("- Left controller axis: Control root xy velocity")
         print("- Right controller axis: Control yaw velocity")
+        print("- Left controller key_two (Y): Toggle recorded reference mode")
         print(f"- Publishes {self.mimic_obs_dim}-dimensional mimic observations")
         print(f"Starting in state: {self.state_machine.get_current_state()}")
 
@@ -1050,6 +1078,7 @@ class XRobotTeleopToRobot:
                 if controller_data is not None:
                     self.state_machine.update(controller_data)
                     self.update_motion_recording_toggle(controller_data)
+                    self.update_use_recorded_reference_toggle(controller_data)
                     self.send_controller_data_to_redis(controller_data)
                 
                 # Check if we should exit

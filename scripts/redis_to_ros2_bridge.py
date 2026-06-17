@@ -20,6 +20,7 @@ from typing import Any
 
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import Bool
 from std_msgs.msg import String
 
 
@@ -145,6 +146,7 @@ class RedisToRos2Bridge(Node):
             "qpos": f"action_qpos_{suffix}",
             "retarget_frame": f"action_retarget_frame_{suffix}",
             "t_action": "t_action",
+            "use_recorded_reference": "use_recorded_reference",
         }
         self.default_qpos = self._build_default_qpos(args.robot)
         self.default_retarget_frame = self._build_fallback_retarget_frame(self.default_qpos)
@@ -158,6 +160,9 @@ class RedisToRos2Bridge(Node):
         qos_depth = max(1, int(args.ros_qos_depth))
         self.pub_retarget_frame = self.create_publisher(
             String, self._topic(args.topic_prefix, "retarget_frame"), qos_depth
+        )
+        self.pub_use_recorded_reference = self.create_publisher(
+            Bool, self._topic(args.topic_prefix, "use_recorded_reference"), qos_depth
         )
 
         self._last_error_log_time = 0.0
@@ -204,6 +209,7 @@ class RedisToRos2Bridge(Node):
             self.redis_keys["qpos"],
             self.redis_keys["retarget_frame"],
             self.redis_keys["t_action"],
+            self.redis_keys["use_recorded_reference"],
         ]
         try:
             values = self.client.command("MGET", *key_order)
@@ -220,13 +226,18 @@ class RedisToRos2Bridge(Node):
                 self._last_error_log_time = now
 
     def _publish_values(self, values: list[Any]) -> None:
-        qpos_raw, frame_raw, t_raw = values
+        qpos_raw, frame_raw, t_raw, use_recorded_reference_raw = values
         qpos = self._parse_json_list(qpos_raw)
         retarget_frame = self._parse_json_dict(frame_raw)
         t_action = self._parse_int(t_raw)
+        use_recorded_reference = self._parse_bool(use_recorded_reference_raw)
 
         if t_action is not None:
             self._check_staleness(t_action)
+
+        msg = Bool()
+        msg.data = use_recorded_reference
+        self.pub_use_recorded_reference.publish(msg)
 
         if self._is_stale_retarget_frame(retarget_frame, t_action):
             self._seed_default_redis_frame()
@@ -422,6 +433,8 @@ class RedisToRos2Bridge(Node):
                 json.dumps(self.default_retarget_frame, separators=(",", ":")),
             )
             self.client.command("SET", self.redis_keys["t_action"], str(now_ms))
+            if force:
+                self.client.command("SET", self.redis_keys["use_recorded_reference"], "false")
             self._last_default_seed_time = now
             if force:
                 self.get_logger().info("Seeded Redis retarget keys with default frame")
@@ -462,6 +475,23 @@ class RedisToRos2Bridge(Node):
         if frame_unix_ms is None:
             return False
         return abs(t_action_ms - frame_unix_ms) > self.args.stale_warn_ms
+
+    @staticmethod
+    def _parse_bool(raw: Any) -> bool:
+        s = RedisToRos2Bridge._decode_bulk(raw)
+        if s is None:
+            return False
+        try:
+            value = json.loads(s)
+        except Exception:
+            value = s
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            return value != 0
+        if isinstance(value, str):
+            return value.strip().lower() in ("1", "true", "yes", "on")
+        return False
 
     @staticmethod
     def _parse_int(raw: Any) -> int | None:
