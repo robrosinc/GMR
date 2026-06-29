@@ -18,6 +18,68 @@ from rich import print
 from tqdm import tqdm
 
 
+def _build_bvh_motion_data_from_qpos(aligned_fps, model, qpos, keybody_names):
+    qpos = np.asarray(qpos, dtype=np.float64)
+    if qpos.ndim != 2:
+        raise ValueError(f"qpos must have shape (T, nq), got {qpos.shape}")
+    if qpos.shape[1] != model.nq:
+        raise ValueError(f"qpos width must match model.nq={model.nq}, got {qpos.shape[1]}")
+
+    body_name_to_id = {
+        mj.mj_id2name(model, mj.mjtObj.mjOBJ_BODY, body_id): body_id
+        for body_id in range(model.nbody)
+    }
+
+    keybody_pairs = [(name, body_name_to_id[name]) for name in keybody_names if name in body_name_to_id]
+    keybody_names = [name for name, _ in keybody_pairs]
+    keybody_ids = [body_id for _, body_id in keybody_pairs]
+
+    local_body_names = [
+        mj.mj_id2name(model, mj.mjtObj.mjOBJ_BODY, body_id)
+        for body_id in range(1, model.nbody)
+    ]
+    local_body_ids = [body_name_to_id[name] for name in local_body_names]
+
+    mj_data = mj.MjData(model)
+    local_qpos = qpos.copy()
+    local_qpos[:, :3] = 0.0
+    local_qpos[:, 3:7] = np.array([1.0, 0.0, 0.0, 0.0])
+
+    keybody_pos_samples = []
+    keybody_rot_samples = []
+    local_body_pos_samples = []
+    for world_frame_qpos, local_frame_qpos in zip(qpos, local_qpos):
+        mj_data.qpos[:] = world_frame_qpos
+        mj.mj_forward(model, mj_data)
+        if keybody_ids:
+            keybody_pos_samples.append(mj_data.xpos[keybody_ids].copy())
+            keybody_rot_samples.append(mj_data.xquat[keybody_ids].copy())
+
+        mj_data.qpos[:] = local_frame_qpos
+        mj.mj_forward(model, mj_data)
+        local_body_pos_samples.append(mj_data.xpos[local_body_ids].copy())
+
+    num_frames = qpos.shape[0]
+    if keybody_pos_samples:
+        keybody_pos_world = np.stack(keybody_pos_samples)
+        keybody_rot_world_wxyz = np.stack(keybody_rot_samples)
+    else:
+        keybody_pos_world = np.zeros((num_frames, 0, 3), dtype=np.float64)
+        keybody_rot_world_wxyz = np.zeros((num_frames, 0, 4), dtype=np.float64)
+
+    return build_motion_data(
+        aligned_fps=aligned_fps,
+        root_pos=qpos[:, :3],
+        root_rot_wxyz=qpos[:, 3:7],
+        dof_pos=qpos[:, 7:],
+        keybody_pos_world=keybody_pos_world,
+        keybody_rot_world_wxyz=keybody_rot_world_wxyz,
+        keybody_names=keybody_names,
+        local_body_pos=np.stack(local_body_pos_samples),
+        local_body_link_body_list=local_body_names,
+    )
+
+
 if __name__ == "__main__":
     
     HERE = pathlib.Path(__file__).parent
@@ -126,20 +188,15 @@ if __name__ == "__main__":
     i = 0
     
     if args.save_path is not None:
-        keybody_names = get_default_keybody_names(args.robot)
-        keybody_pairs = [
-            (name, retargeter.robot_body_names[name])
-            for name in keybody_names
+        keybody_candidates = get_default_keybody_names(args.robot)
+        keybody_names = [
+            name
+            for name in keybody_candidates
             if name in retargeter.robot_body_names
         ]
-        missing_keybodies = [name for name in keybody_names if name not in retargeter.robot_body_names]
+        missing_keybodies = [name for name in keybody_candidates if name not in retargeter.robot_body_names]
         if missing_keybodies:
             print(f"[warn] Missing keybodies in robot model: {missing_keybodies}")
-        keybody_names = [name for name, _ in keybody_pairs]
-        keybody_ids = [idx for _, idx in keybody_pairs]
-        keybody_pos_samples = []
-        keybody_rot_wxyz_samples = []
-        mj_data_save = mj.MjData(retargeter.model)
 
 
     while True:
@@ -176,10 +233,6 @@ if __name__ == "__main__":
 
         if args.save_path is not None:
             qpos_list.append(qpos.copy())
-            mj_data_save.qpos[:] = qpos
-            mj.mj_forward(retargeter.model, mj_data_save)
-            keybody_pos_samples.append(mj_data_save.xpos[keybody_ids].copy())
-            keybody_rot_wxyz_samples.append(mj_data_save.xquat[keybody_ids].copy())
 
         if args.loop:
             i = (i + 1) % len(lafan1_data_frames)
@@ -189,28 +242,11 @@ if __name__ == "__main__":
                 break
 
     if args.save_path is not None:
-        root_pos = np.array([qpos[:3] for qpos in qpos_list])
-        root_rot_wxyz = np.array([qpos[3:7] for qpos in qpos_list])
-        dof_pos = np.array([qpos[7:] for qpos in qpos_list])
-
-        num_frames = len(qpos_list)
-        if keybody_pos_samples:
-            keybody_pos_world = np.stack(keybody_pos_samples)
-            keybody_rot_world_wxyz = np.stack(keybody_rot_wxyz_samples)
-        else:
-            keybody_pos_world = np.zeros((num_frames, 0, 3))
-            keybody_rot_world_wxyz = np.zeros((num_frames, 0, 4))
-
-        motion_data = build_motion_data(
+        motion_data = _build_bvh_motion_data_from_qpos(
             aligned_fps=motion_fps,
-            root_pos=root_pos,
-            root_rot_wxyz=root_rot_wxyz,
-            dof_pos=dof_pos,
-            keybody_pos_world=keybody_pos_world,
-            keybody_rot_world_wxyz=keybody_rot_world_wxyz,
+            model=retargeter.model,
+            qpos=np.asarray(qpos_list),
             keybody_names=keybody_names,
-            local_body_pos=None,
-            local_body_link_body_list=None,
         )
         with open(args.save_path, "wb") as f:
             pickle.dump(motion_data, f)

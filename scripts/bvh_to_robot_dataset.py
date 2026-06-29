@@ -4,13 +4,77 @@ import os
 import mujoco as mj
 import numpy as np
 from tqdm import tqdm
-import torch
 import pickle
 
 from general_motion_retargeting.utils.lafan1 import load_lafan1_file
-from general_motion_retargeting.kinematics_model import KinematicsModel
 from general_motion_retargeting import GeneralMotionRetargeting as GMR
+from general_motion_retargeting.utils.motion_utils import (
+    build_motion_data,
+    get_default_keybody_names,
+)
 from rich import print
+
+
+def _build_bvh_motion_data_from_qpos(aligned_fps, model, qpos, keybody_names):
+    qpos = np.asarray(qpos, dtype=np.float64)
+    if qpos.ndim != 2:
+        raise ValueError(f"qpos must have shape (T, nq), got {qpos.shape}")
+    if qpos.shape[1] != model.nq:
+        raise ValueError(f"qpos width must match model.nq={model.nq}, got {qpos.shape[1]}")
+
+    body_name_to_id = {
+        mj.mj_id2name(model, mj.mjtObj.mjOBJ_BODY, body_id): body_id
+        for body_id in range(model.nbody)
+    }
+
+    keybody_pairs = [(name, body_name_to_id[name]) for name in keybody_names if name in body_name_to_id]
+    keybody_names = [name for name, _ in keybody_pairs]
+    keybody_ids = [body_id for _, body_id in keybody_pairs]
+
+    local_body_names = [
+        mj.mj_id2name(model, mj.mjtObj.mjOBJ_BODY, body_id)
+        for body_id in range(1, model.nbody)
+    ]
+    local_body_ids = [body_name_to_id[name] for name in local_body_names]
+
+    mj_data = mj.MjData(model)
+    local_qpos = qpos.copy()
+    local_qpos[:, :3] = 0.0
+    local_qpos[:, 3:7] = np.array([1.0, 0.0, 0.0, 0.0])
+
+    keybody_pos_samples = []
+    keybody_rot_samples = []
+    local_body_pos_samples = []
+    for world_frame_qpos, local_frame_qpos in zip(qpos, local_qpos):
+        mj_data.qpos[:] = world_frame_qpos
+        mj.mj_forward(model, mj_data)
+        if keybody_ids:
+            keybody_pos_samples.append(mj_data.xpos[keybody_ids].copy())
+            keybody_rot_samples.append(mj_data.xquat[keybody_ids].copy())
+
+        mj_data.qpos[:] = local_frame_qpos
+        mj.mj_forward(model, mj_data)
+        local_body_pos_samples.append(mj_data.xpos[local_body_ids].copy())
+
+    num_frames = qpos.shape[0]
+    if keybody_pos_samples:
+        keybody_pos_world = np.stack(keybody_pos_samples)
+        keybody_rot_world_wxyz = np.stack(keybody_rot_samples)
+    else:
+        keybody_pos_world = np.zeros((num_frames, 0, 3), dtype=np.float64)
+        keybody_rot_world_wxyz = np.zeros((num_frames, 0, 4), dtype=np.float64)
+
+    return build_motion_data(
+        aligned_fps=aligned_fps,
+        root_pos=qpos[:, :3],
+        root_rot_wxyz=qpos[:, 3:7],
+        dof_pos=qpos[:, 7:],
+        keybody_pos_world=keybody_pos_world,
+        keybody_rot_world_wxyz=keybody_rot_world_wxyz,
+        keybody_names=keybody_names,
+        local_body_pos=np.stack(local_body_pos_samples),
+        local_body_link_body_list=local_body_names,
+    )
 
 
 def _norm_rel(path_str):
@@ -120,10 +184,6 @@ if __name__ == "__main__":
                 tgt_robot=args.robot,
                 actual_human_height=actual_human_height,
             )
-            model = mj.MjModel.from_xml_path(retarget.xml_file)
-            data = mj.MjData(model)
-
-            
 
             # retarget to get all qpos
             qpos_list = []
@@ -137,54 +197,22 @@ if __name__ == "__main__":
             
             qpos_list = np.array(qpos_list)
 
-            # Initialize the forward kinematics
-            device = "cuda:0"
-            kinematics_model = KinematicsModel(retarget.xml_file, device=device)
-            
-            root_pos = qpos_list[:, :3]
-            # MuJoCo qpos quaternion is scalar-first (wxyz); keep this ordering in saved motion.
-            root_rot = qpos_list[:, 3:7].copy()
-            dof_pos = qpos_list[:, 7:]
-            num_frames = root_pos.shape[0]
-            
-            # obtain local body pos
-            identity_root_pos = torch.zeros((num_frames, 3), device=device)
-            identity_root_rot = torch.zeros((num_frames, 4), device=device)
-            identity_root_rot[:, -1] = 1.0
-            local_body_pos, _ = kinematics_model.forward_kinematics(
-                identity_root_pos, 
-                identity_root_rot, 
-                torch.from_numpy(dof_pos).to(device=device, dtype=torch.float)
+            keybody_candidates = get_default_keybody_names(args.robot)
+            keybody_names = [
+                name
+                for name in keybody_candidates
+                if name in retarget.robot_body_names
+            ]
+            missing_keybodies = [name for name in keybody_candidates if name not in retarget.robot_body_names]
+            if missing_keybodies:
+                print(f"[warn] Missing keybodies in robot model: {missing_keybodies}")
+
+            motion_data = _build_bvh_motion_data_from_qpos(
+                aligned_fps=src_fps,
+                model=retarget.model,
+                qpos=qpos_list,
+                keybody_names=keybody_names,
             )
-            body_names = kinematics_model.body_names
-
-            HEIGHT_ADJUST = False
-            PERFRAME_ADJUST = False
-            if HEIGHT_ADJUST:
-                # FK expects scalar-last (xyzw), so convert only for FK usage.
-                root_rot_fk = root_rot[:, [1, 2, 3, 0]]
-                body_pos, _ = kinematics_model.forward_kinematics(
-                    torch.from_numpy(root_pos).to(device=device, dtype=torch.float),
-                    torch.from_numpy(root_rot_fk).to(device=device, dtype=torch.float),
-                    torch.from_numpy(dof_pos).to(device=device, dtype=torch.float)
-                )
-                ground_offset = 0.00
-                if not PERFRAME_ADJUST:
-                    lowest_height = torch.min(body_pos[..., 2]).item()
-                    root_pos[:, 2] = root_pos[:, 2] - lowest_height + ground_offset
-                else:
-                    for i in range(root_pos.shape[0]):
-                        lowest_body_part = torch.min(body_pos[i, :, 2])
-                        root_pos[i, 2] = root_pos[i, 2] - lowest_body_part + ground_offset
-
-            motion_data = {
-                "root_pos": root_pos,
-                "root_rot": root_rot,
-                "dof_pos": dof_pos,
-                "local_body_pos": local_body_pos.detach().cpu().numpy(),
-                "fps": src_fps,
-                "link_body_list": body_names,
-            }
             
 
             os.makedirs(os.path.dirname(tgt_file_path), exist_ok=True)
