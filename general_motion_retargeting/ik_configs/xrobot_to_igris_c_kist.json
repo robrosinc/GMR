@@ -8,6 +8,7 @@
   "human_scale_table": {
     "Pelvis": 0.9,
     "Spine3": 0.9,
+    "Head": 1.0,
     "Left_Hip": 0.9,
     "Right_Hip": 0.9,
     "Left_Knee": 0.9,
@@ -22,35 +23,38 @@
     "Right_Wrist": 0.9
   },
   "ik_match_table1": {
-    "Link_Waist_Pitch":        ["Pelvis",              0,  10, [0.0, 0.0, 0.0], [-0.5, 0.5, -0.5, -0.5]],
+    "Link_Waist_Pitch":        ["Pelvis",              20,  20, [0.1, 0.0, 0.0], [-0.5, 0.5, -0.5, -0.5]],
     "Link_Hip_Yaw_Left":       ["Left_Hip",            0,  10, [0.0, 0.0, 0.0], [-0.5, 0.5, -0.5, -0.5]],
     "Link_Knee_Pitch_Left":    ["Left_Knee",           0,  10, [0.0, 0.0, 0.0], [-0.5, 0.5, -0.5, -0.5]],
     "Link_Ankle_Roll_Left":    ["Left_Foot",         100,  10, [0.0, 0.0, 0.0], [-0.5, 0.5, -0.5, -0.5]],
     "Link_Hip_Yaw_Right":      ["Right_Hip",           0,  10, [0.0, 0.0, 0.0], [0.5, -0.5, 0.5, 0.5]],
     "Link_Knee_Pitch_Right":   ["Right_Knee",          0,  10, [0.0, 0.0, 0.0], [0.5, -0.5, 0.5, 0.5]],
     "Link_Ankle_Roll_Right":   ["Right_Foot",        100,  10, [0.0, 0.0, 0.0], [0.5, -0.5, 0.5, 0.5]],
-    "base_link":               ["Spine3",              0,  10, [0.0, 0.0, 0.0], [-0.5, 0.5, -0.5, -0.5]],
+    "base_link":               ["Spine3",              20,  10, [0.1, 0.0, 0.0], [-0.5, 0.5, -0.5, -0.5]],
     "Link_Shoulder_Yaw_Left":  ["Left_Shoulder",       0,  10, [0.0, 0.0, 0.0], [0.7071, 0.0, 0.7071, 0.0]],
     "Link_Elbow_Pitch_Left":   ["Left_Elbow",          0,  10, [0.0, 0.0, 0.0], [0.7071, 0.0, 0.7071, 0.0]],
     "Link_Wrist_Pitch_Left":   ["Left_Wrist",          0,  10, [0.0, 0.0, 0.0], [0.7071, 0.0, 0.7071, 0.0]],
     "Link_Shoulder_Yaw_Right": ["Right_Shoulder",      0,  10, [0.0, 0.0, 0.0], [0.0, -0.7071, 0.0, 0.7071]],
     "Link_Elbow_Pitch_Right":  ["Right_Elbow",         0,  10, [0.0, 0.0, 0.0], [0.0, -0.7071, 0.0, 0.7071]],
-    "Link_Wrist_Pitch_Right":  ["Right_Wrist",         0,  10, [0.0, 0.0, 0.0], [0.0, -0.7071, 0.0, 0.7071]]
+    "Link_Wrist_Pitch_Right":  ["Right_Wrist",         0,  10, [0.0, 0.0, 0.0], [0.0, -0.7071, 0.0, 0.7071]],
+    "Link_Neck_Pitch":         ["Head",         20,  20, [0.0, 0.0, -0.1], [-0.5, 0.5, -0.5, -0.5]]
   },
   "ik_match_table2": {
-    "Link_Waist_Pitch":        ["Pelvis",             10,   5, [0.0, 0.0, 0.0], [-0.5, 0.5, -0.5, -0.5]],
+    "Link_Waist_Pitch":        ["Pelvis",             20,   5, [0.0, 0.0, 0.0], [-0.5, 0.5, -0.5, -0.5]],
     "Link_Hip_Yaw_Left":       ["Left_Hip",           10,   5, [0.0, 0.0, 0.0], [-0.5, 0.5, -0.5, -0.5]],
     "Link_Knee_Pitch_Left":    ["Left_Knee",          10,   5, [0.0, 0.0, 0.0], [-0.5, 0.5, -0.5, -0.5]],
     "Link_Ankle_Roll_Left":    ["Left_Foot",         100,  10, [0.0, 0.0, 0.0], [-0.5, 0.5, -0.5, -0.5]],
     "Link_Hip_Yaw_Right":      ["Right_Hip",          10,   5, [0.0, 0.0, 0.0], [0.5, -0.5, 0.5, 0.5]],
     "Link_Knee_Pitch_Right":   ["Right_Knee",         10,   5, [0.0, 0.0, 0.0], [0.5, -0.5, 0.5, 0.5]],
     "Link_Ankle_Roll_Right":   ["Right_Foot",        100,  10, [0.0, 0.0, 0.0], [0.5, -0.5, 0.5, 0.5]],
-    "base_link":               ["Spine3",              0,  10, [0.0, 0.0, 0.0], [-0.5, 0.5, -0.5, -0.5]],
+    "base_link":               ["Spine3",              20,  10, [0.0, 0.0, 0.0], [-0.5, 0.5, -0.5, -0.5]],
     "Link_Shoulder_Yaw_Left":  ["Left_Shoulder",       0,  10, [0.0, 0.0, 0.0], [0.7071, 0.0, 0.7071, 0.0]],
     "Link_Elbow_Pitch_Left":   ["Left_Elbow",          0,  10, [0.0, 0.0, 0.0], [0.7071, 0.0, 0.7071, 0.0]],
     "Link_Wrist_Pitch_Left":   ["Left_Wrist",          0,  10, [0.0, 0.0, 0.0], [0.7071, 0.0, 0.7071, 0.0]],
     "Link_Shoulder_Yaw_Right": ["Right_Shoulder",      0,  10, [0.0, 0.0, 0.0], [0.0, -0.7071, 0.0, 0.7071]],
     "Link_Elbow_Pitch_Right":  ["Right_Elbow",         0,  10, [0.0, 0.0, 0.0], [0.0, -0.7071, 0.0, 0.7071]],
-    "Link_Wrist_Pitch_Right":  ["Right_Wrist",         0,  10, [0.0, 0.0, 0.0], [0.0, -0.7071, 0.0, 0.7071]]
+    "Link_Wrist_Pitch_Right":  ["Right_Wrist",         0,  10, [0.0, 0.0, 0.0], [0.0, -0.7071, 0.0, 0.7071]],
+    "Link_Neck_Pitch":         ["Head",         0,  10, [0.0, 0.0, 0.0], [-0.5, 0.5, -0.5, -0.5]]
+
   }
 }

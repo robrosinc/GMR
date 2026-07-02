@@ -55,6 +55,96 @@ from general_motion_retargeting.utils.motion_utils import (
     get_default_keybody_names,
 )
 
+
+XROBOT_BODY_SKELETON_EDGES = (
+    ("Pelvis", "Spine1"),
+    ("Spine1", "Spine2"),
+    ("Spine2", "Spine3"),
+    ("Spine3", "Neck"),
+    ("Neck", "Head"),
+    ("Spine3", "Left_Collar"),
+    ("Left_Collar", "Left_Shoulder"),
+    ("Left_Shoulder", "Left_Elbow"),
+    ("Left_Elbow", "Left_Wrist"),
+    ("Left_Wrist", "Left_Hand"),
+    ("Spine3", "Right_Collar"),
+    ("Right_Collar", "Right_Shoulder"),
+    ("Right_Shoulder", "Right_Elbow"),
+    ("Right_Elbow", "Right_Wrist"),
+    ("Right_Wrist", "Right_Hand"),
+    ("Pelvis", "Left_Hip"),
+    ("Left_Hip", "Left_Knee"),
+    ("Left_Knee", "Left_Ankle"),
+    ("Left_Ankle", "Left_Foot"),
+    ("Pelvis", "Right_Hip"),
+    ("Right_Hip", "Right_Knee"),
+    ("Right_Knee", "Right_Ankle"),
+    ("Right_Ankle", "Right_Foot"),
+)
+
+XROBOT_HAND_FINGER_CHAINS = (
+    ("ThumbMetacarpal", "ThumbProximal", "ThumbDistal", "ThumbTip"),
+    ("IndexMetacarpal", "IndexProximal", "IndexIntermediate", "IndexDistal", "IndexTip"),
+    ("MiddleMetacarpal", "MiddleProximal", "MiddleIntermediate", "MiddleDistal", "MiddleTip"),
+    ("RingMetacarpal", "RingProximal", "RingIntermediate", "RingDistal", "RingTip"),
+    ("LittleMetacarpal", "LittleProximal", "LittleIntermediate", "LittleDistal", "LittleTip"),
+)
+
+XROBOT_SKELETON_LINE_RGBA = np.array([0.1, 0.85, 1.0, 0.75])
+XROBOT_SKELETON_JOINT_RGBA = np.array([1.0, 0.9, 0.25, 0.9])
+
+
+def build_xrobot_hand_skeleton_edges(side):
+    prefix = f"{side}Hand"
+    wrist = f"{prefix}Wrist"
+    palm = f"{prefix}Palm"
+    edges = [(f"{side}_Hand", wrist), (wrist, palm)]
+    for chain in XROBOT_HAND_FINGER_CHAINS:
+        first_joint = f"{prefix}{chain[0]}"
+        edges.append((palm, first_joint))
+        for parent_name, child_name in zip(chain, chain[1:]):
+            edges.append((f"{prefix}{parent_name}", f"{prefix}{child_name}"))
+    return tuple(edges)
+
+
+XROBOT_HAND_SKELETON_EDGES = (
+    *build_xrobot_hand_skeleton_edges("Left"),
+    *build_xrobot_hand_skeleton_edges("Right"),
+)
+
+
+def draw_user_capsule(viewer, start, end, width, rgba):
+    if viewer.user_scn.ngeom >= viewer.user_scn.maxgeom:
+        return
+    if np.linalg.norm(end - start) < 1e-6:
+        return
+    geom = viewer.user_scn.geoms[viewer.user_scn.ngeom]
+    mj.mjv_connector(
+        geom,
+        type=mj.mjtGeom.mjGEOM_CAPSULE,
+        width=width,
+        from_=start,
+        to=end,
+    )
+    geom.rgba[:] = rgba
+    viewer.user_scn.ngeom += 1
+
+
+def draw_user_sphere(viewer, pos, radius, rgba):
+    if viewer.user_scn.ngeom >= viewer.user_scn.maxgeom:
+        return
+    geom = viewer.user_scn.geoms[viewer.user_scn.ngeom]
+    mj.mjv_initGeom(
+        geom,
+        type=mj.mjtGeom.mjGEOM_SPHERE,
+        size=[radius, 0.0, 0.0],
+        pos=pos,
+        mat=np.eye(3).flatten(),
+        rgba=rgba,
+    )
+    viewer.user_scn.ngeom += 1
+
+
 def start_interpolation(state_machine, start_obs, end_obs, duration=1.0):
     """Start interpolation from start_obs to end_obs over given duration"""
     state_machine.is_interpolating = True
@@ -446,6 +536,8 @@ class XRobotTeleopToRobot:
         self.motion_toggle_debounce_s = 0.35
         self.motion_qpos_buffer = []
         self.motion_ts_buffer = []
+        self.motion_raw_xrobot_buffer = []
+        self.enable_raw_xrobot_save = self.enable_motion_save and bool(self.args.save_raw_xrobot_data)
         self.motion_keybody_names = []
         self.motion_keybody_ids = []
         self.motion_mj_data_save = None
@@ -453,6 +545,12 @@ class XRobotTeleopToRobot:
         self.use_recorded_reference_prev_pressed = False
         self.use_recorded_reference_last_toggle_time = 0.0
         self.use_recorded_reference_debounce_s = 0.35
+        self.current_raw_xrobot_data = None
+        self.show_raw_xrobot_skeleton = bool(self.args.show_raw_xrobot_skeleton)
+        self.raw_xrobot_skeleton_offset = np.asarray(
+            self.args.raw_xrobot_skeleton_offset,
+            dtype=float,
+        )
 
     def setup_teleop_data_streamer(self):
         """Initialize and start the teleop data streamer"""
@@ -635,6 +733,7 @@ class XRobotTeleopToRobot:
             if self.motion_collecting:
                 self.motion_qpos_buffer.clear()
                 self.motion_ts_buffer.clear()
+                self.motion_raw_xrobot_buffer.clear()
                 print("[REC] ON")
             else:
                 saved = self.save_motion_chunk(force=True)
@@ -660,12 +759,67 @@ class XRobotTeleopToRobot:
 
         self.use_recorded_reference_prev_pressed = y_pressed
 
-    def record_motion_frame(self, qpos):
+    @staticmethod
+    def _serialize_hand_frame(hand_data):
+        if isinstance(hand_data, (tuple, list)) and len(hand_data) == 2:
+            is_active, pose_dict = hand_data
+            return {
+                "is_active": bool(is_active),
+                "data": XRobotTeleopToRobot._jsonable(pose_dict),
+            }
+        return {
+            "is_active": None,
+            "data": XRobotTeleopToRobot._jsonable(hand_data) if hand_data is not None else None,
+        }
+
+    def build_raw_xrobot_record_frame(
+        self,
+        body_data,
+        left_hand_data,
+        right_hand_data,
+        controller_data,
+        headset_data,
+        sdk_raw_data,
+        record_time,
+    ):
+        return {
+            "t_record_unix": float(record_time),
+            "sdk_raw": self._jsonable(sdk_raw_data),
+            "body": self._jsonable(body_data),
+            "left_hand": self._serialize_hand_frame(left_hand_data),
+            "right_hand": self._serialize_hand_frame(right_hand_data),
+            "controller": self._jsonable(controller_data),
+            "headset": self._jsonable(headset_data),
+        }
+
+    def record_motion_frame(
+        self,
+        qpos,
+        body_data=None,
+        left_hand_data=None,
+        right_hand_data=None,
+        controller_data=None,
+        headset_data=None,
+        sdk_raw_data=None,
+    ):
         """Record one retargeted qpos frame while collecting is ON."""
         if not self.enable_motion_save or not self.motion_collecting or qpos is None:
             return
+        record_time = time.time()
         self.motion_qpos_buffer.append(qpos.copy())
-        self.motion_ts_buffer.append(time.time())
+        self.motion_ts_buffer.append(record_time)
+        if self.enable_raw_xrobot_save:
+            self.motion_raw_xrobot_buffer.append(
+                self.build_raw_xrobot_record_frame(
+                    body_data=body_data,
+                    left_hand_data=left_hand_data,
+                    right_hand_data=right_hand_data,
+                    controller_data=controller_data,
+                    headset_data=headset_data,
+                    sdk_raw_data=sdk_raw_data,
+                    record_time=record_time,
+                )
+            )
 
     def save_motion_chunk(self, force=False):
         """Save current motion buffer into a pkl chunk."""
@@ -732,19 +886,59 @@ class XRobotTeleopToRobot:
             "target_fps": float(self.target_fps),
             "saved_fps": float(aligned_fps),
             "measured_fps": float(measured_fps),
+            "raw_xrobot_saved": bool(self.enable_raw_xrobot_save),
         }
 
         save_path = self.motion_save_dir / f"{self.motion_save_prefix}_{self.motion_chunk_idx:04d}.pkl"
         with open(save_path, "wb") as f:
             pickle.dump(motion_data, f)
 
+        raw_save_path = None
+        if self.enable_raw_xrobot_save:
+            raw_save_path = self.motion_save_dir / f"{self.motion_save_prefix}_{self.motion_chunk_idx:04d}_raw.pkl"
+            raw_data = {
+                "frames": self.motion_raw_xrobot_buffer[:num_frames],
+                "meta": {
+                    "source": "XRobotStreamer.get_current_frame",
+                    "sdk_raw_key": "sdk_raw",
+                    "normalized_input_keys": [
+                        "body",
+                        "left_hand",
+                        "right_hand",
+                        "controller",
+                        "headset",
+                    ],
+                    "sdk_raw_body_pose_format": "[x, y, z, qx, qy, qz, qw]",
+                    "body_pose_format": {
+                        "position": "xyz",
+                        "quaternion": "wxyz",
+                        "coordinates": "GMR right-hand coordinates after XRobotStreamer transform",
+                    },
+                    "robot": self.retarget_robot_name,
+                    "chunk_idx": self.motion_chunk_idx,
+                    "num_frames": min(num_frames, len(self.motion_raw_xrobot_buffer)),
+                    "raw_file": raw_save_path.name,
+                    "motion_file": save_path.name,
+                    "record_start_unix": float(ts_arr[0]),
+                    "record_end_unix": float(ts_arr[-1]),
+                    "target_fps": float(self.target_fps),
+                    "saved_fps": float(aligned_fps),
+                    "measured_fps": float(measured_fps),
+                },
+            }
+            with open(raw_save_path, "wb") as f:
+                pickle.dump(raw_data, f)
+
         print(
             f"[SAVE] {save_path} "
             f"(frames={num_frames}, saved_fps={aligned_fps:.2f}, measured_fps={measured_fps:.2f})"
         )
+        if raw_save_path is not None:
+            print(f"[SAVE] {raw_save_path} (raw_xrobot_frames={len(raw_data['frames'])})")
         self.motion_chunk_idx += 1
         self.motion_qpos_buffer.clear()
         self.motion_ts_buffer.clear()
+        self.motion_raw_xrobot_buffer.clear()
         return True
     
     def setup_mujoco_simulation(self):
@@ -776,7 +970,13 @@ class XRobotTeleopToRobot:
     def get_teleop_data(self):
         """Get current teleop data from streamer"""
         if self.teleop_data_streamer is not None:
-            return self.teleop_data_streamer.get_current_frame()
+            frame = self.teleop_data_streamer.get_current_frame()
+            if self.enable_raw_xrobot_save and hasattr(self.teleop_data_streamer, "get_last_raw_frame"):
+                self.current_raw_xrobot_data = self.teleop_data_streamer.get_last_raw_frame()
+            else:
+                self.current_raw_xrobot_data = None
+            return frame
+        self.current_raw_xrobot_data = None
         return None, None, None, None, None
         
     def process_retargeting(self, smplx_data):
@@ -800,8 +1000,88 @@ class XRobotTeleopToRobot:
         
         self.last_qpos = qpos.copy()
         return qpos, current_retarget_obs
-        
-    def update_visualization(self, qpos, smplx_data, viewer):
+
+    @staticmethod
+    def _extract_active_hand_pose_dict(hand_data):
+        if isinstance(hand_data, dict):
+            return hand_data
+        if isinstance(hand_data, (tuple, list)) and len(hand_data) == 2:
+            is_active, pose_dict = hand_data
+            if bool(is_active) and isinstance(pose_dict, dict):
+                return pose_dict
+        return {}
+
+    @staticmethod
+    def _pose_position(pose_dict, body_name):
+        if body_name not in pose_dict:
+            return None
+        pose = pose_dict[body_name]
+        if not isinstance(pose, (tuple, list)) or len(pose) < 1:
+            return None
+        pos = np.asarray(pose[0], dtype=float)
+        if pos.shape != (3,) or not np.all(np.isfinite(pos)):
+            return None
+        return pos
+
+    def _build_raw_xrobot_skeleton_pose_dict(self, body_data, left_hand_data, right_hand_data):
+        if not isinstance(body_data, dict):
+            return {}
+
+        pose_dict = dict(body_data)
+        pose_dict.update(self._extract_active_hand_pose_dict(left_hand_data))
+        pose_dict.update(self._extract_active_hand_pose_dict(right_hand_data))
+        return pose_dict
+
+    def draw_raw_xrobot_skeleton(self, qpos, body_data, left_hand_data, right_hand_data, viewer):
+        if not self.show_raw_xrobot_skeleton:
+            return
+        if qpos is None or not hasattr(viewer, "user_scn") or viewer.user_scn is None:
+            return
+
+        pose_dict = self._build_raw_xrobot_skeleton_pose_dict(
+            body_data,
+            left_hand_data,
+            right_hand_data,
+        )
+        pelvis_pos = self._pose_position(pose_dict, "Pelvis")
+        if pelvis_pos is None:
+            return
+
+        placement_offset = qpos[:3] + self.raw_xrobot_skeleton_offset - pelvis_pos
+        edge_names = set()
+        skeleton_edges = XROBOT_BODY_SKELETON_EDGES + XROBOT_HAND_SKELETON_EDGES
+        for parent_name, child_name in skeleton_edges:
+            edge_names.add(parent_name)
+            edge_names.add(child_name)
+
+        joint_positions = {}
+        for body_name in edge_names:
+            pos = self._pose_position(pose_dict, body_name)
+            if pos is not None:
+                joint_positions[body_name] = pos + placement_offset
+
+        for parent_name, child_name in skeleton_edges:
+            parent_pos = joint_positions.get(parent_name)
+            child_pos = joint_positions.get(child_name)
+            if parent_pos is None or child_pos is None:
+                continue
+            draw_user_capsule(
+                viewer,
+                parent_pos,
+                child_pos,
+                width=0.012,
+                rgba=XROBOT_SKELETON_LINE_RGBA,
+            )
+
+        for pos in joint_positions.values():
+            draw_user_sphere(
+                viewer,
+                pos,
+                radius=0.025,
+                rgba=XROBOT_SKELETON_JOINT_RGBA,
+            )
+
+    def update_visualization(self, qpos, smplx_data, left_hand_data, right_hand_data, viewer):
         """Update MuJoCo visualization"""
         if qpos is None:
             return
@@ -823,7 +1103,15 @@ class XRobotTeleopToRobot:
                     0.1,
                     orientation_correction=R.from_quat(ik_data[-1]),
                 )
-                
+
+        self.draw_raw_xrobot_skeleton(
+            qpos,
+            smplx_data,
+            left_hand_data,
+            right_hand_data,
+            viewer,
+        )
+
         # Update the simulation
         if qpos is not None:
             self.data.qpos[:] = qpos.copy()
@@ -1054,6 +1342,12 @@ class XRobotTeleopToRobot:
                 f"- Retargeted motion save: ENABLED "
                 f"(toggle with Right key_one: ON/OFF)"
             )
+            print(f"- Raw XRobot data save: {self.enable_raw_xrobot_save}")
+        if self.show_raw_xrobot_skeleton:
+            print(
+                "- Raw XRobot skeleton: ENABLED "
+                f"(offset={self.raw_xrobot_skeleton_offset.tolist()})"
+            )
 
         print("Ready to receive teleop data.")
 
@@ -1094,8 +1388,22 @@ class XRobotTeleopToRobot:
                 qpos, current_retarget_obs = None, None
                 if smplx_data is not None:
                     qpos, current_retarget_obs = self.process_retargeting(smplx_data)
-                    self.update_visualization(qpos, smplx_data, viewer)
-                    self.record_motion_frame(qpos)
+                    self.update_visualization(
+                        qpos,
+                        smplx_data,
+                        left_hand_data,
+                        right_hand_data,
+                        viewer,
+                    )
+                    self.record_motion_frame(
+                        qpos,
+                        body_data=smplx_data,
+                        left_hand_data=left_hand_data,
+                        right_hand_data=right_hand_data,
+                        controller_data=controller_data,
+                        headset_data=headset_data,
+                        sdk_raw_data=self.current_raw_xrobot_data,
+                    )
                 
                 # Handle state transitions
                 self.handle_state_transitions(current_retarget_obs)
@@ -1194,10 +1502,30 @@ def parse_arguments():
         help="Measure and print detailed FPS statistics (0=disabled, 1=enabled).",
     )
     parser.add_argument(
+        "--show_raw_xrobot_skeleton",
+        type=str2bool,
+        default=True,
+        help="Draw the raw PICO/XRobot body skeleton beside the retargeted robot.",
+    )
+    parser.add_argument(
+        "--raw_xrobot_skeleton_offset",
+        type=float,
+        nargs=3,
+        default=[0.0, 1.2, 0.0],
+        metavar=("DX", "DY", "DZ"),
+        help="XYZ offset from retargeted qpos root used to place the raw XRobot skeleton.",
+    )
+    parser.add_argument(
         "--save_pkl_enabled",
         type=str2bool,
         default=True,
         help="Enable/disable teleop pkl saving (true/false).",
+    )
+    parser.add_argument(
+        "--save_raw_xrobot_data",
+        type=str2bool,
+        default=False,
+        help="Save raw PICO/XRobot input frames inside each retargeted motion pkl.",
     )
     parser.add_argument(
         "--save_pkl_dir",

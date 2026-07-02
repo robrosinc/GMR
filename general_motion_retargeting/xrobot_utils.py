@@ -36,6 +36,11 @@ class XRobotStreamer:
 
         self.last_left_hand_data = {}
         self.last_right_hand_data = {}
+        self.last_raw_body_frame = None
+        self.last_raw_left_hand_frame = None
+        self.last_raw_right_hand_frame = None
+        self.last_raw_controller_frame = None
+        self.last_raw_headset_pose = None
 
     
     def get_controller_data(self):
@@ -62,7 +67,7 @@ class XRobotStreamer:
         timestamp = xrt.get_time_stamp_ns()
 
         # return
-        return {
+        controller_data = {
             'LeftController': {
                 'index_trig': left_trigger,
                 'grip': left_grip,
@@ -81,10 +86,13 @@ class XRobotStreamer:
             },
             'timestamp': timestamp,
         }
+        self.last_raw_controller_frame = controller_data
+        return controller_data
 
 
     def get_headset_pose(self):
         headset_pose = xrt.get_headset_pose()
+        self.last_raw_headset_pose = headset_pose
         return headset_pose
     
     def get_left_controller_pose(self):
@@ -98,6 +106,10 @@ class XRobotStreamer:
     def get_left_hand_data(self):
         left_hand_tracking_state = xrt.get_left_hand_tracking_state()
         left_hand_is_active = xrt.get_left_hand_is_active()
+        self.last_raw_left_hand_frame = {
+            "is_active": left_hand_is_active,
+            "tracking_state": left_hand_tracking_state,
+        }
         hand_data_dict = {}
         for i, joint_name in enumerate(self.hand_joint_names):
             pos = [left_hand_tracking_state[i][0], left_hand_tracking_state[i][1], left_hand_tracking_state[i][2]] # xyz
@@ -109,6 +121,10 @@ class XRobotStreamer:
     def get_right_hand_data(self):
         right_hand_tracking_state = xrt.get_right_hand_tracking_state()
         right_hand_is_active = xrt.get_right_hand_is_active()
+        self.last_raw_right_hand_frame = {
+            "is_active": right_hand_is_active,
+            "tracking_state": right_hand_tracking_state,
+        }
         hand_data_dict = {}
         for i, joint_name in enumerate(self.hand_joint_names):
             pos = [right_hand_tracking_state[i][0], right_hand_tracking_state[i][1], right_hand_tracking_state[i][2]] # xyz
@@ -121,6 +137,7 @@ class XRobotStreamer:
 
         if not xrt.is_body_data_available():
             # print("No body tracking data. return None", end="\r")
+            self.last_raw_body_frame = None
             return None, None, None, None, None
 
         if xrt.is_body_data_available():
@@ -130,6 +147,13 @@ class XRobotStreamer:
             body_accelerations = xrt.get_body_joints_acceleration() # ax, ay, az, wax, way, waz
             imu_timestamps = xrt.get_body_joints_timestamp() # list of [timestamp]
             body_timestamp = xrt.get_body_timestamp_ns() # timestamp in ns
+            self.last_raw_body_frame = {
+                "poses": body_poses,
+                "velocities": body_velocities,
+                "accelerations": body_accelerations,
+                "imu_timestamps": imu_timestamps,
+                "body_timestamp": body_timestamp,
+            }
 
             return body_poses, body_velocities, body_accelerations, imu_timestamps, body_timestamp
         else:
@@ -196,6 +220,15 @@ class XRobotStreamer:
         controller_data = self.get_controller_data()
         headset_pose = self.get_headset_pose()
         return body_pose_dict, left_hand_data, right_hand_data, controller_data, headset_pose
+
+    def get_last_raw_frame(self):
+        return {
+            "body": self.last_raw_body_frame,
+            "left_hand": self.last_raw_left_hand_frame,
+            "right_hand": self.last_raw_right_hand_frame,
+            "controller": self.last_raw_controller_frame,
+            "headset": self.last_raw_headset_pose,
+        }
 
 
 class XRobotRecorder:

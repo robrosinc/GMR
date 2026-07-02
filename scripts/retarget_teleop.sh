@@ -9,10 +9,13 @@ python scripts/xrobot_teleop_to_robot_w_hand.py --robot robros_igris_c_v2 \
              --target_fps 100 \
              --measure_fps 1 \
              --save_pkl_enabled true \
-             --save_pkl_dir pico/debug/ \
+             --save_pkl_dir pico/tmp/ \
              --save_pkl_every_n_steps 1000 \
              --save_pkl_fps 100 \
              --save_pkl_prefix pico_debug \
              --save_pkl_toggle_with_right_key_one \
              --pinch_mode \
+             --show_raw_xrobot_skeleton true \
+             --raw_xrobot_skeleton_offset 0.0 1.2 0.0 \
+             --save_raw_xrobot_data true \
             #  --smooth \
