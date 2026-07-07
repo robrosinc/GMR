@@ -11,6 +11,7 @@ ROOT_ROTATION_DEGREES="${ROOT_ROTATION_DEGREES:-90}"
 ROTATE_TRANSLATION="${ROTATE_TRANSLATION:-1}"
 ROOT_HEIGHT_AXIS="${ROOT_HEIGHT_AXIS:-z}"
 ROOT_HEIGHT_OFFSET="${ROOT_HEIGHT_OFFSET:-0.97}"
+NUM_WORKERS="${NUM_WORKERS:-1}"
 OVERWRITE="${OVERWRITE:-0}"
 
 usage() {
@@ -29,13 +30,14 @@ Options:
       --no-rotate_translation      Do not rotate translation trajectory.
       --root_height_axis AXIS      Root height offset axis: x, y, or z. Default: z
       --root_height_offset VALUE   Root height offset. Default: 0.97
+      --num_workers N             Number of parallel conversion processes. Default: 1
       --overwrite                  Convert even when output already exists.
   -h, --help                       Show this help.
 
 Environment overrides:
   PYTHON_BIN, INPUT_DIR, OUTPUT_DIR, PATTERN, GENDER, ROOT_ROTATION_AXIS,
   ROOT_ROTATION_DEGREES, ROTATE_TRANSLATION, ROOT_HEIGHT_AXIS,
-  ROOT_HEIGHT_OFFSET, OVERWRITE
+  ROOT_HEIGHT_OFFSET, NUM_WORKERS, OVERWRITE
 EOF
 }
 
@@ -79,6 +81,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --root_height_offset)
       ROOT_HEIGHT_OFFSET="$2"
+      shift 2
+      ;;
+    --num_workers)
+      NUM_WORKERS="$2"
       shift 2
       ;;
     --overwrite)
@@ -135,7 +141,16 @@ case "$ROOT_HEIGHT_AXIS" in
     ;;
 esac
 
+if ! [[ "$NUM_WORKERS" =~ ^[0-9]+$ ]] || [[ "$NUM_WORKERS" -lt 1 ]]; then
+  echo "Invalid --num_workers '$NUM_WORKERS'. Expected a positive integer." >&2
+  exit 2
+fi
+
 CONVERT_ARGS=(
+  --src_folder "$INPUT_DIR"
+  --tgt_folder "$OUTPUT_DIR"
+  --pattern "$PATTERN"
+  --num_workers "$NUM_WORKERS"
   --gender "$GENDER"
   --root_rotation_axis "$ROOT_ROTATION_AXIS"
   --root_rotation_degrees "$ROOT_ROTATION_DEGREES"
@@ -147,35 +162,8 @@ if [[ "$ROTATE_TRANSLATION" == "1" ]]; then
   CONVERT_ARGS+=(--rotate_translation)
 fi
 
-mapfile -d '' INPUT_FILES < <(find "$INPUT_DIR" -type f -name "$PATTERN" -print0 | sort -z)
-if [[ "${#INPUT_FILES[@]}" -eq 0 ]]; then
-  echo "No files matched pattern '$PATTERN' under $INPUT_DIR" >&2
-  exit 1
+if [[ "$OVERWRITE" == "1" ]]; then
+  CONVERT_ARGS+=(--overwrite)
 fi
 
-total="${#INPUT_FILES[@]}"
-converted_count=0
-skip_count=0
-
-for input_file in "${INPUT_FILES[@]}"; do
-  rel_path="${input_file#"$INPUT_DIR"/}"
-  output_file="$OUTPUT_DIR/$rel_path"
-
-  if [[ "$OVERWRITE" != "1" && -e "$output_file" ]]; then
-    echo "[skip] $output_file already exists"
-    skip_count=$((skip_count + 1))
-    continue
-  fi
-
-  mkdir -p "$(dirname "$output_file")"
-  echo "[$((converted_count + skip_count + 1))/$total] $input_file -> $output_file"
-
-  "$PYTHON_BIN" scripts/smpl_to_smplx.py \
-    --input_file "$input_file" \
-    --output_file "$output_file" \
-    "${CONVERT_ARGS[@]}"
-
-  converted_count=$((converted_count + 1))
-done
-
-echo "Done. Converted: $converted_count, skipped: $skip_count, total: $total"
+"$PYTHON_BIN" scripts/smpl_to_smplx.py "${CONVERT_ARGS[@]}"
