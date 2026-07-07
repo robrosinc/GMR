@@ -23,7 +23,7 @@
     "RightHand": 0.9
   },
   "ik_match_table1": {
-    "Link_Waist_Pitch":        ["Hips",                0,  10, [0.0, 0.0, 0.0], [0.5, 0.5, 0.5, 0.5]],
+    "Link_Waist_Pitch":        ["Hips",                100,  100, [0.0, 0.0, 0.0], [0.5, 0.5, 0.5, 0.5]],
     "Link_Hip_Yaw_Left":       ["LeftUpLeg",           0,  10, [0.0, 0.0, 0.0], [-0.5, 0.5, 0.5, -0.5]],
     "Link_Knee_Pitch_Left":    ["LeftLeg",             0,  10, [0.0, 0.0, 0.0], [-0.5, 0.5, 0.5, -0.5]],
     "Link_Ankle_Roll_Left":    ["LeftFootMod",        50,  10, [0.0, 0.0, 0.0], [-0.70710678, 0.70710678, 0.0, 0.0]],
@@ -31,10 +31,10 @@
     "Link_Knee_Pitch_Right":   ["RightLeg",            0,  10, [0.0, 0.0, 0.0], [0.5, -0.5, -0.5, 0.5]],
     "Link_Ankle_Roll_Right":   ["RightFootMod",       50,  10, [0.0, 0.0, 0.0], [0.70710678, -0.70710678, 0.0, 0.0]],
     "base_link":               ["Spine2",              0, 100, [0.0, 0.0, 0.0], [0.5, 0.5, 0.5, 0.5]],
-    "Link_Shoulder_Yaw_Left":  ["LeftArm",             0, 100, [0.0, 0.0, 0.0], [0.5, 0.5, -0.5, -0.5]],
+    "Link_Shoulder_Pitch_Left":  ["LeftArm",             0, 20, [0.0, 0.0, 0.0], [0.5, 0.5, -0.5, -0.5]],
     "Link_Elbow_Pitch_Left":   ["LeftForeArm",         0,  10, [0.0, 0.0, -0.03], [0.5, 0.5, -0.5, -0.5]],
     "Link_Wrist_Pitch_Left":   ["LeftHand",            0,  10, [0.0, 0.0, -0.06], [0.5, 0.5, -0.5, -0.5]],
-    "Link_Shoulder_Yaw_Right": ["RightArm",            0, 100, [0.0, 0.0, 0.0], [-0.5, -0.5, 0.5, 0.5]],
+    "Link_Shoulder_Pitch_Right": ["RightArm",            0, 20, [0.0, 0.0, 0.0], [-0.5, -0.5, 0.5, 0.5]],
     "Link_Elbow_Pitch_Right":  ["RightForeArm",        0,  10, [0.0, 0.0, -0.03], [-0.5, -0.5, 0.5, 0.5]],
     "Link_Wrist_Pitch_Right":  ["RightHand",           0,  10, [0.0, 0.0, -0.06], [-0.5, -0.5, 0.5, 0.5]],
     "Link_Neck_Pitch": ["Head",10,10,[0.0, 0.0, -0.1],[0.5, 0.5, 0.5, 0.5]]
@@ -48,10 +48,10 @@
     "Link_Knee_Pitch_Right":   ["RightLeg",           10,   5, [0.0, 0.0, 0.0], [0.5, -0.5, -0.5, 0.5]],
     "Link_Ankle_Roll_Right":   ["RightFootMod",       50,  10, [0.0, 0.0, 0.0], [0.70710678, -0.70710678, 0.0, 0.0]],
     "base_link":               ["Spine2",              100,  100, [0.0, 0.0, 0.0], [0.5, 0.5, 0.5, 0.5]],
-    "Link_Shoulder_Yaw_Left":  ["LeftArm",             5, 100, [0.0, 0.0, 0.0], [0.5, 0.5, -0.5, -0.5]],
+    "Link_Shoulder_Pitch_Left":  ["LeftArm",             5, 20, [0.0, 0.0, 0.0], [0.5, 0.5, -0.5, -0.5]],
     "Link_Elbow_Pitch_Left":   ["LeftForeArm",        10,   5, [0.0, 0.0, 0.0], [0.5, 0.5, -0.5, -0.5]],
     "Link_Wrist_Pitch_Left":   ["LeftHand",           10,   5, [0.0, 0.0, 0.0], [0.5, 0.5, -0.5, -0.5]],
-    "Link_Shoulder_Yaw_Right": ["RightArm",            5, 100, [0.0, 0.0, 0.0], [-0.5, -0.5, 0.5, 0.5]],
+    "Link_Shoulder_Pitch_Right": ["RightArm",            5, 20, [0.0, 0.0, 0.0], [-0.5, -0.5, 0.5, 0.5]],
     "Link_Elbow_Pitch_Right":  ["RightForeArm",       10,   5, [0.0, 0.0, 0.0], [-0.5, -0.5, 0.5, 0.5]],
     "Link_Wrist_Pitch_Right":  ["RightHand",          10,   5, [0.0, 0.0, 0.0], [-0.5, -0.5, 0.5, 0.5]],
     "Link_Neck_Pitch": ["Head",0,0,[0.0, 0.0, -0.1],[0.5, 0.5, 0.5, 0.5]]
