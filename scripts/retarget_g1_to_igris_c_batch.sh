@@ -2,8 +2,8 @@
 set -euo pipefail
 
 PYTHON_BIN="${PYTHON_BIN:-python3}"
-INPUT_DIR="${INPUT_DIR:-/home/robros/workspace/motion_datas/bones_seed_g1_npz/}"
-OUTPUT_DIR="${OUTPUT_DIR:-/home/robros/workspace/motion_datas/retargeted/bones_seed_retargeted/}"
+INPUT_DIR="${INPUT_DIR:-/home/robros/workspace/kimodo/outputs/locomotions_g1/}"
+OUTPUT_DIR="${OUTPUT_DIR:-/home/robros/workspace/kimodo/outputs/locomotions_g1/retargeted/}"
 PATTERN="${PATTERN:-*.npz}"
 ROOT_QUAT_SCALAR_FIRST="${ROOT_QUAT_SCALAR_FIRST:-true}"
 MOTION_FPS="${MOTION_FPS:-30}"

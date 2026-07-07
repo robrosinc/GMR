@@ -2,8 +2,8 @@
 set -euo pipefail
 
 PYTHON_BIN="${PYTHON_BIN:-python3}"
-G1_MOTION_PATH="${G1_MOTION_PATH:-/home/robros/workspace/motion_datas/bones_test/walk_forward_hips_amplified_impro_001__A002_M.npz}"
-SAVE_PATH="${SAVE_PATH:-/home/robros/workspace/motion_datas/bones_test/walk_forward_hips_amplified_impro_001__A002_M_igris.pkl}"
+G1_MOTION_PATH="${G1_MOTION_PATH:-/home/robros/workspace/kimodo/rolling.npz}"
+SAVE_PATH="${SAVE_PATH:-/home/robros/workspace/kimodo/rolling.pkl}"
 ROOT_QUAT_SCALAR_FIRST="${ROOT_QUAT_SCALAR_FIRST:-true}"
 MOTION_FPS="${MOTION_FPS:-30}"
 NO_VIEWER="${NO_VIEWER:-0}"
