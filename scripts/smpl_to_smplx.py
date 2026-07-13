@@ -39,39 +39,114 @@ def offset_root_height(trans, axis, offset):
     return updated_trans
 
 
-def convert_smpl_to_smplx(input_path, output_path, gender='neutral', root_rotation_axis='y', root_rotation_degrees=0.0, rotate_translation=False, root_height_axis='y', root_height_offset=0.0):
+def normalize_betas_for_smplx(betas, input_path):
+    betas = np.asarray(betas)
+    if betas.ndim == 2:
+        if betas.shape[1] not in (10, 16):
+            raise ValueError(
+                f"Unexpected betas shape: {betas.shape}. "
+                "Expected second dimension of 10 or 16 for per-frame betas."
+            )
+        if betas.shape[0] == 0:
+            raise ValueError(f"Empty betas array in {input_path}")
+        if not np.allclose(betas, betas[0], atol=1e-5):
+            print(
+                f"[warn] betas vary across frames in {input_path}; "
+                "using the first frame as static body shape."
+            )
+        betas = betas[0]
+
+    if betas.shape == (10,):
+        print(f"Padded betas from 10 to 16 for {input_path}")
+        return np.concatenate([betas, np.zeros(6, dtype=betas.dtype)])
+    if betas.shape == (16,):
+        return betas
+
+    raise ValueError(
+        f"Unexpected betas shape: {betas.shape}. "
+        "Expected (10,), (16,), or per-frame betas shaped "
+        "(N,10) or (N,16) for padding to SMPL-X."
+    )
+
+
+def get_smpl_pose_components(data_dict, input_path):
+    if 'poses' in data_dict:
+        poses = data_dict.pop('poses')
+        if poses.ndim != 2 or poses.shape[1] < 66:
+            raise ValueError(
+                f"Unexpected poses shape: {poses.shape}. Expected at least (N,66)."
+            )
+        if poses.shape[1] > 72:
+            poses = poses[:, :72]
+        return poses[:, :3], poses[:, 3:66]
+
+    if 'root_orient' not in data_dict or 'pose_body' not in data_dict:
+        raise ValueError(
+            "Input file does not contain 'poses' or both 'root_orient' and 'pose_body' keys. "
+            "Is this an SMPL file?"
+        )
+
+    root_orient = data_dict['root_orient']
+    pose_body = data_dict['pose_body']
+    if root_orient.ndim != 2 or root_orient.shape[1] != 3:
+        raise ValueError(
+            f"Unexpected root_orient shape: {root_orient.shape}. Expected (N,3)."
+        )
+    if pose_body.ndim != 2 or pose_body.shape[1] < 63:
+        raise ValueError(
+            f"Unexpected pose_body shape: {pose_body.shape}. Expected at least (N,63)."
+        )
+    if pose_body.shape[0] != root_orient.shape[0]:
+        raise ValueError(
+            f"Mismatched frame counts in {input_path}: "
+            f"root_orient has {root_orient.shape[0]}, pose_body has {pose_body.shape[0]}."
+        )
+    return root_orient, pose_body[:, :63]
+
+
+def convert_smpl_to_smplx(
+    input_path,
+    output_path,
+    gender='neutral',
+    root_rotation_axis='y',
+    root_rotation_degrees=0.0,
+    rotate_translation=False,
+    root_height_axis='y',
+    root_height_offset=0.0,
+    mocap_frame_rate=30.0,
+):
     # Load SMPL data
     smpl_data = np.load(input_path, allow_pickle=True)
     data_dict = dict(smpl_data)  # Convert to dict for modification
 
     # Handle betas padding for SMPL-X (pad from 10 to 16 if necessary)
     if 'betas' in data_dict:
-        betas = data_dict['betas']
-        if betas.shape == (10,):
-            data_dict['betas'] = np.concatenate([betas, np.zeros(6, dtype=betas.dtype)])
-            print(f"Padded betas from 10 to 16 for {input_path}")
-        elif betas.shape not in [(16,), (1, 16)]:
-            raise ValueError(f"Unexpected betas shape: {betas.shape}. Expected (10,), (16,), or (1,16) for padding to SMPL-X.")
+        data_dict['betas'] = normalize_betas_for_smplx(data_dict['betas'], input_path)
 
     # Handle mocap_frame_rate variations
     if 'mocap_framerate' in data_dict:
         data_dict['mocap_frame_rate'] = data_dict.pop('mocap_framerate')
         print(f"Renamed 'mocap_framerate' to 'mocap_frame_rate' for {input_path}")
 
-    if 'poses' not in data_dict:
-        raise ValueError("Input file does not contain 'poses' key. Is this an SMPL file?")
+    root_orient, pose_body = get_smpl_pose_components(data_dict, input_path)
+    num_frames = root_orient.shape[0]
 
-    poses = data_dict['poses']
-    if poses.shape[1] > 72:
-        poses = poses[:, :72]
+    if 'mocap_frame_rate' not in data_dict:
+        data_dict['mocap_frame_rate'] = np.array(
+            float(mocap_frame_rate), dtype=np.float32
+        )
+        print(f"Set missing mocap_frame_rate={mocap_frame_rate} for {input_path}")
+    if 'mocap_time_length' not in data_dict:
+        fps = float(np.asarray(data_dict['mocap_frame_rate']).item())
+        data_dict['mocap_time_length'] = np.array(num_frames / fps, dtype=np.float32)
 
     # Map to SMPL-X format
     data_dict['root_orient'] = rotate_root_orient(
-        poses[:, :3],
+        root_orient,
         root_rotation_axis,
         root_rotation_degrees,
     )
-    data_dict['pose_body'] = poses[:, 3:66]  # 21 joints x 3 = 63, ignoring SMPL hand poses
+    data_dict['pose_body'] = pose_body  # 21 joints x 3 = 63, ignoring SMPL hand poses
     if rotate_translation and 'trans' in data_dict:
         data_dict['trans'] = rotate_root_translation(
             data_dict['trans'],
@@ -89,9 +164,6 @@ def convert_smpl_to_smplx(input_path, output_path, gender='neutral', root_rotati
     if 'gender' not in data_dict:
         data_dict['gender'] = np.array(gender)
 
-    # Remove original poses key
-    del data_dict['poses']
-
     # Save as SMPL-X npz
     np.savez(output_path, **data_dict)
     print(f"Converted {input_path} to {output_path}")
@@ -106,6 +178,7 @@ def _convert_task(task):
         rotate_translation,
         root_height_axis,
         root_height_offset,
+        mocap_frame_rate,
     ) = task
     try:
         convert_smpl_to_smplx(
@@ -117,6 +190,7 @@ def _convert_task(task):
             rotate_translation,
             root_height_axis,
             root_height_offset,
+            mocap_frame_rate,
         )
         return input_path, output_path, None
     except Exception as exc:
@@ -134,6 +208,7 @@ def collect_conversion_tasks(
     rotate_translation=False,
     root_height_axis="y",
     root_height_offset=0.0,
+    mocap_frame_rate=30.0,
 ):
     src_root = Path(src_folder)
     tgt_root = Path(tgt_folder)
@@ -156,6 +231,7 @@ def collect_conversion_tasks(
                 rotate_translation,
                 root_height_axis,
                 root_height_offset,
+                mocap_frame_rate,
             )
         )
     return input_paths, tasks, skipped
@@ -173,6 +249,7 @@ def process_directory(
     pattern="*.npz",
     num_workers=1,
     overwrite=False,
+    mocap_frame_rate=30.0,
 ):
     src_root = Path(src_folder)
     if not src_root.is_dir():
@@ -191,6 +268,7 @@ def process_directory(
         rotate_translation=rotate_translation,
         root_height_axis=root_height_axis,
         root_height_offset=root_height_offset,
+        mocap_frame_rate=mocap_frame_rate,
     )
     total = len(input_paths)
     if total == 0:
@@ -253,6 +331,8 @@ if __name__ == "__main__":
                         help="Translation axis used for root height offset. Default: y.")
     parser.add_argument("--root_height_offset", type=float, default=0.0,
                         help="Offset added to the root translation height axis after optional trajectory rotation.")
+    parser.add_argument("--mocap_frame_rate", type=float, default=30.0,
+                        help="Frame rate written when the input file does not provide one. Default: 30.")
     args = parser.parse_args()
 
     if args.src_folder and args.tgt_folder:
@@ -268,6 +348,7 @@ if __name__ == "__main__":
             args.pattern,
             args.num_workers,
             args.overwrite,
+            args.mocap_frame_rate,
         )
     elif args.input_file and args.output_file:
         convert_smpl_to_smplx(
@@ -279,6 +360,7 @@ if __name__ == "__main__":
             args.rotate_translation,
             args.root_height_axis,
             args.root_height_offset,
+            args.mocap_frame_rate,
         )
     else:
         parser.print_help()

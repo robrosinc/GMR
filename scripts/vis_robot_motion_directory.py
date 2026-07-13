@@ -5,7 +5,12 @@ from natsort import natsorted
 from rich import print
 from loop_rate_limiters import RateLimiter
 
-from general_motion_retargeting import MotionCurationList, RobotMotionViewer, load_robot_motion
+from general_motion_retargeting import (
+    MotionCurationList,
+    RawXRobotMotionLoader,
+    RobotMotionViewer,
+    load_robot_motion,
+)
 from vis_controls import (
     create_control_state,
     log_controls_once,
@@ -31,6 +36,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--robot", type=str, default="unitree_g1")
     parser.add_argument("--robot_motion_dir", type=str, required=True)
+    parser.add_argument(
+        "--raw_xrobot_dir",
+        type=str,
+        default=None,
+        help="Optional directory containing raw PICO/XRobot '<motion_name>_raw.pkl' files.",
+    )
+    parser.add_argument(
+        "--raw_xrobot_skeleton_offset",
+        type=float,
+        nargs=3,
+        default=[0.0, 1.2, 0.0],
+        metavar=("DX", "DY", "DZ"),
+        help="XYZ offset from retargeted root used to place the raw XRobot skeleton.",
+    )
     parser.add_argument("--non_recursive", action="store_true")
     parser.add_argument("--loop", action="store_true")
     parser.add_argument("--curation_txt_path", type=str, default="curation.txt")
@@ -60,6 +79,11 @@ if __name__ == "__main__":
     print("Close the MuJoCo window to exit.")
     curation = MotionCurationList(resolve_curation_path(args.curation_txt_path))
     print(f"Curation file: {curation.path} (loaded {len(curation)} clips)")
+    raw_xrobot_loader = RawXRobotMotionLoader(
+        args.raw_xrobot_dir,
+        motion_root_dir=robot_motion_dir,
+        log_fn=print,
+    )
 
     viewer = None
     should_stop = False
@@ -80,6 +104,7 @@ if __name__ == "__main__":
                 _motion_link_body_list,
             ) = load_robot_motion(motion_path)
             playback_fps = motion_fps * control_state["speed"]
+            raw_xrobot_motion = raw_xrobot_loader.load_for_motion(motion_path)
 
             if viewer is None:
                 viewer = RobotMotionViewer(
@@ -139,6 +164,12 @@ if __name__ == "__main__":
                     motion_root_pos[frame_idx],
                     motion_root_rot[frame_idx],
                     motion_dof_pos[frame_idx],
+                    xrobot_motion_data=(
+                        raw_xrobot_motion.frame_at(frame_idx, num_frames)
+                        if raw_xrobot_motion is not None
+                        else None
+                    ),
+                    xrobot_skeleton_offset=args.raw_xrobot_skeleton_offset,
                     rate_limit=not args.no_rate_limit,
                 )
                 if control_state["clip_delta"] != 0:

@@ -6,6 +6,7 @@ import mujoco.viewer as mjv
 import imageio
 from scipy.spatial.transform import Rotation as R
 from general_motion_retargeting import ROBOT_XML_DICT, ROBOT_BASE_DICT, VIEWER_CAM_DISTANCE_DICT
+from .raw_xrobot_motion import draw_xrobot_skeleton
 from loop_rate_limiters import RateLimiter
 import numpy as np
 from rich import print
@@ -240,6 +241,9 @@ class RobotMotionViewer:
             human_point_scale=0.1,
             # human pos offset add for visualization    
             human_pos_offset=np.array([0.0, 0.0, 0]),
+            # raw PICO/XRobot skeleton data saved during teleop
+            xrobot_motion_data=None,
+            xrobot_skeleton_offset=np.array([0.0, 1.2, 0.0]),
             # rate limit
             rate_limit=True, 
             follow_camera=None,
@@ -277,7 +281,12 @@ class RobotMotionViewer:
             self.viewer.cam.elevation = -10  # 正面视角，轻微向下看
             # self.viewer.cam.azimuth = 180    # 正面朝向机器人
         
-        if human_motion_data is not None or self.show_com_projection or self.viewer.user_scn.ngeom > 0:
+        if (
+            human_motion_data is not None
+            or xrobot_motion_data is not None
+            or self.show_com_projection
+            or self.viewer.user_scn.ngeom > 0
+        ):
             self.viewer.user_scn.ngeom = 0
 
         if human_motion_data is not None:
@@ -291,6 +300,14 @@ class RobotMotionViewer:
                     pos_offset=human_pos_offset,
                     joint_name=human_body_name if show_human_body_name else None
                     )
+
+        if xrobot_motion_data is not None:
+            draw_xrobot_skeleton(
+                self.viewer,
+                xrobot_motion_data,
+                np.asarray(root_pos),
+                np.asarray(xrobot_skeleton_offset),
+            )
 
         if self.show_com_projection:
             com = np.sum(self.data.xipos * self.model.body_mass[:, None], axis=0) / np.sum(self.model.body_mass)
