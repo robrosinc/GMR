@@ -45,7 +45,7 @@ IK_CONFIG_DICT = {
         "booster_k1": IK_CONFIG_ROOT / "smplx_to_k1.json",
         "pnd_adam_lite": IK_CONFIG_ROOT / "smplx_to_adam.json",
         "tienkung": IK_CONFIG_ROOT / "smplx_to_tienkung.json",
-        "robros_igris_c_v2": IK_CONFIG_ROOT / "smplx_to_igris_c_tmp.json", # smplx_to_igris_c_2, smplx_to_igris_c_tmp, smplx_to_igris_c_kimodo
+        "robros_igris_c_v2": IK_CONFIG_ROOT / "smplx_to_igris_c.json", # smplx_to_igris_c_2, smplx_to_igris_c_tmp, smplx_to_igris_c_kimodo
         "robros_igris_max": IK_CONFIG_ROOT / "smplx_to_igris_max.json",
     },
     "bvh_lafan1":{
