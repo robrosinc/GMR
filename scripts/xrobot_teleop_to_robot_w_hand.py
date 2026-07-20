@@ -522,13 +522,16 @@ class XRobotTeleopToRobot:
         self.retarget_frame_idx = 0
         self.retarget_frame_prev_qpos = None
         self.retarget_frame_prev_time = None
+        self.retarget_zero_velocity_tail_frames = 5
+        self.retarget_zero_velocity_frames_remaining = 0
 
-        # Optional motion recording (retargeted qpos -> segmented pkl files)
+        # Optional motion recording (retargeted qpos -> pkl files)
         self.enable_motion_save = bool(self.args.save_pkl_enabled) and (self.args.save_pkl_dir is not None)
         self.motion_save_dir = pathlib.Path(self.args.save_pkl_dir) if self.enable_motion_save else None
         self.motion_save_every_n_steps = max(1, self.args.save_pkl_every_n_steps)
         self.motion_save_prefix = self.args.save_pkl_prefix
         self.motion_save_fps = max(1e-3, float(self.args.save_pkl_fps))
+        self.motion_save_whole_session = bool(getattr(self.args, "save_pkl_whole_session", False))
         self.motion_chunk_idx = 0
         self.motion_collecting = True
         self.motion_toggle_prev_pressed = False
@@ -617,7 +620,22 @@ class XRobotTeleopToRobot:
             return raw_value > 0
         return bool(raw_value)
 
-    def build_retarget_frame_payload(self, qpos):
+    def _should_zero_retarget_frame_velocity(self, controller_data):
+        if controller_data is not None and self._controller_button_pressed(
+            controller_data,
+            "RightController",
+            "key_one",
+        ):
+            self.retarget_zero_velocity_frames_remaining = self.retarget_zero_velocity_tail_frames
+            return True
+
+        if self.retarget_zero_velocity_frames_remaining > 0:
+            self.retarget_zero_velocity_frames_remaining -= 1
+            return True
+
+        return False
+
+    def build_retarget_frame_payload(self, qpos, zero_velocity=False):
         """
         Build one-frame payload with the same key schema as saved pkl motion_data.
         """
@@ -658,7 +676,11 @@ class XRobotTeleopToRobot:
         root_vel = np.zeros((1, 3), dtype=np.float64)
         root_angvel = np.zeros((1, 3), dtype=np.float64)
         dof_vel = np.zeros((1, dof_pos.shape[1]), dtype=np.float64)
-        if self.retarget_frame_prev_qpos is not None and self.retarget_frame_prev_time is not None:
+        if (
+            not zero_velocity
+            and self.retarget_frame_prev_qpos is not None
+            and self.retarget_frame_prev_time is not None
+        ):
             dt = now - self.retarget_frame_prev_time
             if dt > 1e-6:
                 prev_qpos = self.retarget_frame_prev_qpos
@@ -683,7 +705,7 @@ class XRobotTeleopToRobot:
         return self._jsonable(motion_data)
 
     def setup_motion_recording(self):
-        """Setup optional segmented pkl recording for retargeted motion."""
+        """Setup optional pkl recording for retargeted motion."""
         if not self.enable_motion_save:
             return
         self.motion_save_dir.mkdir(parents=True, exist_ok=True)
@@ -698,9 +720,11 @@ class XRobotTeleopToRobot:
         ]
         self.motion_mj_data_save = mj.MjData(self.retarget.model)
         self._initialize_motion_chunk_index()
+        recording_mode = "whole_session" if self.motion_save_whole_session else "toggle"
+        toggle_info = "" if self.motion_save_whole_session else ", toggle=RightController.key_one"
         print(
             f"Motion recording enabled: dir={self.motion_save_dir}, "
-            f"toggle=RightController.key_one, "
+            f"mode={recording_mode}{toggle_info}, "
             f"start_collecting={self.motion_collecting}, "
             f"save_fps={self.motion_save_fps}"
         )
@@ -716,7 +740,7 @@ class XRobotTeleopToRobot:
 
     def update_motion_recording_toggle(self, controller_data):
         """Toggle recording with RightController.key_one edge + cooldown."""
-        if not self.enable_motion_save:
+        if not self.enable_motion_save or self.motion_save_whole_session:
             return
         raw_right_key = controller_data.get("RightController", {}).get("key_one", False)
         if isinstance(raw_right_key, (int, float)) and not isinstance(raw_right_key, bool):
@@ -1242,7 +1266,7 @@ class XRobotTeleopToRobot:
         self.state_machine.state = "teleop"
         print("Auto-transition: idle -> teleop (motion data detected)")
             
-    def send_to_redis(self, mimic_obs, neck_data=None, qpos=None):
+    def send_to_redis(self, mimic_obs, neck_data=None, qpos=None, controller_data=None):
         """Send mimic observations to Redis"""
         if self.redis_publisher is None or mimic_obs is None:
             return
@@ -1258,7 +1282,13 @@ class XRobotTeleopToRobot:
             hand_left_pose = np.zeros(7)
             hand_right_pose = np.zeros(7)
 
-        retarget_frame = self.build_retarget_frame_payload(qpos) if qpos is not None else None
+        retarget_frame = None
+        if qpos is not None:
+            zero_velocity = self._should_zero_retarget_frame_velocity(controller_data)
+            retarget_frame = self.build_retarget_frame_payload(
+                qpos,
+                zero_velocity=zero_velocity,
+            )
         self.redis_publisher.publish_action(
             body=mimic_obs,
             hand_left=hand_left_pose,
@@ -1338,9 +1368,13 @@ class XRobotTeleopToRobot:
         else:
             print(f"- FPS measurement: Quick stats only (every {self.fps_monitor.quick_print_interval} steps)")
         if self.enable_motion_save:
+            save_mode = (
+                "whole session, ignores Right key_one/A"
+                if self.motion_save_whole_session
+                else "toggle with Right key_one: ON/OFF"
+            )
             print(
-                f"- Retargeted motion save: ENABLED "
-                f"(toggle with Right key_one: ON/OFF)"
+                f"- Retargeted motion save: ENABLED ({save_mode})"
             )
             print(f"- Raw XRobot data save: {self.enable_raw_xrobot_save}")
         if self.show_raw_xrobot_skeleton:
@@ -1416,7 +1450,12 @@ class XRobotTeleopToRobot:
                 if neck_data_to_send is not None:
                     self.state_machine.set_current_neck_data(neck_data_to_send)
                 
-                self.send_to_redis(mimic_obs_to_send, neck_data_to_send, qpos=qpos)
+                self.send_to_redis(
+                    mimic_obs_to_send,
+                    neck_data_to_send,
+                    qpos=qpos,
+                    controller_data=controller_data,
+                )
                 
                 # Update visualization and record video
                 viewer.sync()
@@ -1555,6 +1594,14 @@ def parse_arguments():
         "--save_pkl_toggle_with_right_key_one",
         action="store_true",
         help="Reserved option for teleop launcher compatibility.",
+    )
+    parser.add_argument(
+        "--save_pkl_whole_session",
+        action="store_true",
+        help=(
+            "Record continuously and save one pkl at shutdown, "
+            "ignoring the RightController.key_one/A toggle."
+        ),
     )
     return parser.parse_args()
 
