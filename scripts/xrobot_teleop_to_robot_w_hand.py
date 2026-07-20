@@ -522,8 +522,15 @@ class XRobotTeleopToRobot:
         self.retarget_frame_idx = 0
         self.retarget_frame_prev_qpos = None
         self.retarget_frame_prev_time = None
-        self.retarget_zero_velocity_tail_frames = 5
+        self.retarget_zero_velocity_tail_frames = 10
         self.retarget_zero_velocity_frames_remaining = 0
+        self.retarget_velocity_lpf_enabled = bool(self.args.retarget_velocity_lpf_enabled)
+        self.retarget_velocity_lpf_cutoff_hz = float(self.args.retarget_velocity_lpf_cutoff_hz)
+        self.retarget_velocity_lpf_state = {
+            "root_vel": None,
+            "root_angvel": None,
+            "dof_vel": None,
+        }
 
         # Optional motion recording (retargeted qpos -> pkl files)
         self.enable_motion_save = bool(self.args.save_pkl_enabled) and (self.args.save_pkl_dir is not None)
@@ -635,6 +642,37 @@ class XRobotTeleopToRobot:
 
         return False
 
+    def _retarget_velocity_lpf_alpha(self, dt):
+        cutoff_hz = max(1e-6, self.retarget_velocity_lpf_cutoff_hz)
+        dt = max(1e-6, float(dt))
+        tau = 1.0 / (2.0 * np.pi * cutoff_hz)
+        return dt / (tau + dt)
+
+    def _filter_retarget_velocity_sample(self, key, sample, alpha):
+        prev = self.retarget_velocity_lpf_state.get(key)
+        if prev is None or prev.shape != sample.shape:
+            filtered = sample.copy()
+        else:
+            filtered = prev + alpha * (sample - prev)
+        self.retarget_velocity_lpf_state[key] = filtered.copy()
+        return filtered
+
+    def _apply_retarget_velocity_lpf(self, root_vel, root_angvel, dof_vel, dt, zero_velocity):
+        if not self.retarget_velocity_lpf_enabled:
+            return root_vel, root_angvel, dof_vel
+
+        if zero_velocity:
+            self.retarget_velocity_lpf_state["root_vel"] = root_vel[0].copy()
+            self.retarget_velocity_lpf_state["root_angvel"] = root_angvel[0].copy()
+            self.retarget_velocity_lpf_state["dof_vel"] = dof_vel[0].copy()
+            return root_vel, root_angvel, dof_vel
+
+        alpha = self._retarget_velocity_lpf_alpha(dt if dt is not None else 1.0 / self.target_fps)
+        root_vel[0] = self._filter_retarget_velocity_sample("root_vel", root_vel[0], alpha)
+        root_angvel[0] = self._filter_retarget_velocity_sample("root_angvel", root_angvel[0], alpha)
+        dof_vel[0] = self._filter_retarget_velocity_sample("dof_vel", dof_vel[0], alpha)
+        return root_vel, root_angvel, dof_vel
+
     def build_retarget_frame_payload(self, qpos, zero_velocity=False):
         """
         Build one-frame payload with the same key schema as saved pkl motion_data.
@@ -676,6 +714,7 @@ class XRobotTeleopToRobot:
         root_vel = np.zeros((1, 3), dtype=np.float64)
         root_angvel = np.zeros((1, 3), dtype=np.float64)
         dof_vel = np.zeros((1, dof_pos.shape[1]), dtype=np.float64)
+        velocity_dt = None
         if (
             not zero_velocity
             and self.retarget_frame_prev_qpos is not None
@@ -683,10 +722,18 @@ class XRobotTeleopToRobot:
         ):
             dt = now - self.retarget_frame_prev_time
             if dt > 1e-6:
+                velocity_dt = dt
                 prev_qpos = self.retarget_frame_prev_qpos
                 root_vel[0] = (qpos[:3] - prev_qpos[:3]) / dt
                 root_angvel[0] = quat_diff_np(prev_qpos[3:7], qpos[3:7], scalar_first=True) / dt
                 dof_vel[0] = (qpos[7:] - prev_qpos[7:]) / dt
+        root_vel, root_angvel, dof_vel = self._apply_retarget_velocity_lpf(
+            root_vel,
+            root_angvel,
+            dof_vel,
+            velocity_dt,
+            zero_velocity,
+        )
         motion_data["root_vel"] = root_vel
         motion_data["root_angvel"] = root_angvel
         motion_data["dof_vel"] = dof_vel
@@ -1382,6 +1429,13 @@ class XRobotTeleopToRobot:
                 "- Raw XRobot skeleton: ENABLED "
                 f"(offset={self.raw_xrobot_skeleton_offset.tolist()})"
             )
+        if self.retarget_velocity_lpf_enabled:
+            print(
+                "- Retarget velocity LPF: ENABLED "
+                f"(cutoff_hz={self.retarget_velocity_lpf_cutoff_hz})"
+            )
+        else:
+            print("- Retarget velocity LPF: DISABLED")
 
         print("Ready to receive teleop data.")
 
@@ -1539,6 +1593,18 @@ def parse_arguments():
         type=int,
         default=0,
         help="Measure and print detailed FPS statistics (0=disabled, 1=enabled).",
+    )
+    parser.add_argument(
+        "--retarget_velocity_lpf_enabled",
+        type=str2bool,
+        default=False,
+        help="Apply lightweight first-order LPF to retarget_frame root_vel/root_angvel/dof_vel.",
+    )
+    parser.add_argument(
+        "--retarget_velocity_lpf_cutoff_hz",
+        type=float,
+        default=8.0,
+        help="Cutoff frequency for retarget_frame velocity LPF.",
     )
     parser.add_argument(
         "--show_raw_xrobot_skeleton",
