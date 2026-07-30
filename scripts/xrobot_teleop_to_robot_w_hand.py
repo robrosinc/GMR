@@ -551,11 +551,16 @@ class XRobotTeleopToRobot:
         self.motion_keybody_names = []
         self.motion_keybody_ids = []
         self.motion_mj_data_save = None
-        self.use_recorded_reference = False
-        self.use_recorded_reference_prev_pressed = False
-        self.use_recorded_reference_last_toggle_time = 0.0
-        self.use_recorded_reference_debounce_s = 0.35
         self.current_raw_xrobot_data = None
+        self.debug_pico_event_prev_snapshot = None
+        self.gmr_event_prev_active = {
+            "lowcmd_start": False,
+            "stop": False,
+            "go_home": False,
+            "mode_switch": False,
+            "motion_next": False,
+            "motion_repeat": False,
+        }
         self.show_raw_xrobot_skeleton = bool(self.args.show_raw_xrobot_skeleton)
         self.raw_xrobot_skeleton_offset = np.asarray(
             self.args.raw_xrobot_skeleton_offset,
@@ -571,7 +576,6 @@ class XRobotTeleopToRobot:
         """Setup Redis connection"""
         redis_ip = self.args.redis_ip
         self.redis_publisher = Twist2RedisPublisher(redis_ip, self.robot_name)
-        self.redis_publisher.publish_use_recorded_reference(self.use_recorded_reference)
         print("Redis connected successfully")
 
     def setup_retargeting_system(self):
@@ -815,21 +819,6 @@ class XRobotTeleopToRobot:
 
         self.motion_toggle_prev_pressed = right_key_pressed
 
-    def update_use_recorded_reference_toggle(self, controller_data):
-        """Toggle recorded-reference mode with the Pico Y button."""
-        y_pressed = self._controller_button_pressed(controller_data, "LeftController", "key_two")
-        y_just_pressed = y_pressed and not self.use_recorded_reference_prev_pressed
-
-        now = time.monotonic()
-        if y_just_pressed and (now - self.use_recorded_reference_last_toggle_time) >= self.use_recorded_reference_debounce_s:
-            self.use_recorded_reference_last_toggle_time = now
-            self.use_recorded_reference = not self.use_recorded_reference
-            if self.redis_publisher is not None:
-                self.redis_publisher.publish_use_recorded_reference(self.use_recorded_reference)
-            print(f"[REF] use_recorded_reference={self.use_recorded_reference}")
-
-        self.use_recorded_reference_prev_pressed = y_pressed
-
     @staticmethod
     def _serialize_hand_frame(hand_data):
         if isinstance(hand_data, (tuple, list)) and len(hand_data) == 2:
@@ -1046,10 +1035,113 @@ class XRobotTeleopToRobot:
                 self.current_raw_xrobot_data = self.teleop_data_streamer.get_last_raw_frame()
             else:
                 self.current_raw_xrobot_data = None
+            # self.debug_print_pico_events(frame[3])
             return frame
         self.current_raw_xrobot_data = None
         return None, None, None, None, None
-        
+
+    def debug_print_pico_events(self, controller_data):
+        """Print Pico controller input whenever any controller event changes."""
+        if controller_data is None:
+            return
+
+        snapshot = {
+            "LeftController": self._jsonable(controller_data.get("LeftController", {})),
+            "RightController": self._jsonable(controller_data.get("RightController", {})),
+        }
+        if snapshot == self.debug_pico_event_prev_snapshot:
+            return
+
+        changed = []
+        if self.debug_pico_event_prev_snapshot is not None:
+            for controller_name, values in snapshot.items():
+                prev_values = self.debug_pico_event_prev_snapshot.get(controller_name, {})
+                for event_name, value in values.items():
+                    if prev_values.get(event_name) != value:
+                        changed.append(f"{controller_name}.{event_name}={value}")
+
+        timestamp = controller_data.get("timestamp")
+        changed_text = ", ".join(changed) if changed else "initial"
+        print(f"[PICO EVENT] ts={timestamp} changed={changed_text}")
+        print(f"[PICO EVENT DATA] {self._jsonable(controller_data)}")
+        self.debug_pico_event_prev_snapshot = snapshot
+
+    @staticmethod
+    def _controller_axis_over_threshold(
+        controller_data,
+        controller_name,
+        axis_index,
+        threshold=0.5,
+    ):
+        axis = controller_data.get(controller_name, {}).get("axis", [0.0, 0.0])
+        if not isinstance(axis, (list, tuple)) or len(axis) <= axis_index:
+            return False
+        try:
+            return float(axis[axis_index]) > threshold
+        except (TypeError, ValueError):
+            return False
+
+    def publish_one_shot_gmr_events(self, controller_data):
+        """Write one-frame Redis flags for Pico edge/crossing events."""
+        active = {
+            "lowcmd_start": self._controller_button_pressed(
+                controller_data,
+                "RightController",
+                "key_two",
+            ),
+            "stop": (
+                self._controller_button_pressed(
+                    controller_data,
+                    "RightController",
+                    "axis_click",
+                )
+                or self._controller_button_pressed(
+                    controller_data,
+                    "RightController",
+                    "axis_button",
+                )
+            ),
+            "go_home": (
+                self._controller_button_pressed(
+                    controller_data,
+                    "LeftController",
+                    "axis_click",
+                )
+                or self._controller_button_pressed(
+                    controller_data,
+                    "LeftController",
+                    "axis_button",
+                )
+            ),
+            "mode_switch": self._controller_button_pressed(
+                controller_data,
+                "LeftController",
+                "key_two",
+            ),
+            "motion_next": self._controller_axis_over_threshold(
+                controller_data,
+                "LeftController",
+                0,
+            ),
+            "motion_repeat": self._controller_axis_over_threshold(
+                controller_data,
+                "LeftController",
+                1,
+            ),
+        }
+        triggered = {
+            event_name: True
+            for event_name, is_active in active.items()
+            if is_active and not self.gmr_event_prev_active.get(event_name, False)
+        }
+        self.gmr_event_prev_active = active
+
+        if not triggered or self.redis_publisher is None:
+            return
+
+        self.redis_publisher.publish_gmr_events(triggered)
+        print(f"[GMR EVENT] {', '.join(triggered.keys())}")
+
     def process_retargeting(self, smplx_data):
         """Process motion retargeting and return observations"""
         if smplx_data is None or self.retarget is None:
@@ -1401,7 +1493,6 @@ class XRobotTeleopToRobot:
         print("- Left controller axis_click: Emergency stop - kills sim2real.sh process")
         print("- Left controller axis: Control root xy velocity")
         print("- Right controller axis: Control yaw velocity")
-        print("- Left controller key_two (Y): Toggle recorded reference mode")
         print(f"- Publishes {self.mimic_obs_dim}-dimensional mimic observations")
         print(f"Starting in state: {self.state_machine.get_current_state()}")
 
@@ -1460,7 +1551,7 @@ class XRobotTeleopToRobot:
                 if controller_data is not None:
                     self.state_machine.update(controller_data)
                     self.update_motion_recording_toggle(controller_data)
-                    self.update_use_recorded_reference_toggle(controller_data)
+                    self.publish_one_shot_gmr_events(controller_data)
                     self.send_controller_data_to_redis(controller_data)
                 
                 # Check if we should exit

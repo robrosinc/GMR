@@ -7,6 +7,14 @@ import numpy as np
 
 
 TWIST2_CANONICAL_SUFFIX = "unitree_g1_with_hands"
+GMR_EVENT_REDIS_KEYS = {
+    "lowcmd_start": "gmr_event_lowcmd_start",
+    "stop": "gmr_event_stop",
+    "go_home": "gmr_event_go_home",
+    "mode_switch": "gmr_event_mode_switch",
+    "motion_next": "gmr_event_motion_next",
+    "motion_repeat": "gmr_event_motion_repeat",
+}
 
 
 def resolve_action_suffix(robot_name: str) -> str:
@@ -110,8 +118,21 @@ class Twist2RedisPublisher:
             return
         self.client.set("controller_data", json_dumps(controller_data))
 
-    def publish_use_recorded_reference(self, enabled: bool) -> None:
-        self.client.set("use_recorded_reference", json_dumps(bool(enabled)))
+    def publish_gmr_events(self, events: dict[str, bool]) -> None:
+        if not events:
+            return
+        pipe = self.client.pipeline()
+        has_event = False
+        for event_name, enabled in events.items():
+            if not enabled:
+                continue
+            redis_key = GMR_EVENT_REDIS_KEYS.get(event_name)
+            if redis_key is None:
+                continue
+            pipe.set(redis_key, json_dumps(True))
+            has_event = True
+        if has_event:
+            pipe.execute()
 
     def publish_action(
         self,

@@ -24,6 +24,24 @@ from std_msgs.msg import Bool
 from std_msgs.msg import String
 
 
+GMR_EVENT_REDIS_KEYS = {
+    "lowcmd_start": "gmr_event_lowcmd_start",
+    "stop": "gmr_event_stop",
+    "go_home": "gmr_event_go_home",
+    "mode_switch": "gmr_event_mode_switch",
+    "motion_next": "gmr_event_motion_next",
+    "motion_repeat": "gmr_event_motion_repeat",
+}
+GMR_EVENT_TOPICS = {
+    "lowcmd_start": "/gmr/lowcmd_start",
+    "stop": "/gmr/stop",
+    "go_home": "/gmr/go_home",
+    "mode_switch": "/gmr/mode_switch",
+    "motion_next": "/gmr/motion_next",
+    "motion_repeat": "/gmr/motion_repeat",
+}
+
+
 def _preview(data: list[float] | None, n: int) -> str:
     if data is None:
         return "None"
@@ -146,8 +164,8 @@ class RedisToRos2Bridge(Node):
             "qpos": f"action_qpos_{suffix}",
             "retarget_frame": f"action_retarget_frame_{suffix}",
             "t_action": "t_action",
-            "use_recorded_reference": "use_recorded_reference",
         }
+        self.gmr_event_keys = GMR_EVENT_REDIS_KEYS.copy()
         self.default_qpos = self._build_default_qpos(args.robot)
         self.default_retarget_frame = self._build_fallback_retarget_frame(self.default_qpos)
         self.default_retarget_frame["record_meta"] = {
@@ -161,9 +179,10 @@ class RedisToRos2Bridge(Node):
         self.pub_retarget_frame = self.create_publisher(
             String, self._topic(args.topic_prefix, "retarget_frame"), qos_depth
         )
-        self.pub_use_recorded_reference = self.create_publisher(
-            Bool, self._topic(args.topic_prefix, "use_recorded_reference"), qos_depth
-        )
+        self.gmr_event_publishers = {
+            event_name: self.create_publisher(Bool, topic, qos_depth)
+            for event_name, topic in GMR_EVENT_TOPICS.items()
+        }
 
         self._last_error_log_time = 0.0
         self._last_stale_log_time = 0.0
@@ -180,6 +199,10 @@ class RedisToRos2Bridge(Node):
         self.get_logger().info(
             "Redis keys: "
             + ", ".join(f"{k}={v}" for k, v in self.redis_keys.items())
+        )
+        self.get_logger().info(
+            "Event Redis keys: "
+            + ", ".join(f"{k}={v}" for k, v in self.gmr_event_keys.items())
         )
         self._seed_default_redis_frame(force=True)
 
@@ -209,7 +232,7 @@ class RedisToRos2Bridge(Node):
             self.redis_keys["qpos"],
             self.redis_keys["retarget_frame"],
             self.redis_keys["t_action"],
-            self.redis_keys["use_recorded_reference"],
+            *self.gmr_event_keys.values(),
         ]
         try:
             values = self.client.command("MGET", *key_order)
@@ -226,18 +249,14 @@ class RedisToRos2Bridge(Node):
                 self._last_error_log_time = now
 
     def _publish_values(self, values: list[Any]) -> None:
-        qpos_raw, frame_raw, t_raw, use_recorded_reference_raw = values
+        qpos_raw, frame_raw, t_raw, *event_raw_values = values
         qpos = self._parse_json_list(qpos_raw)
         retarget_frame = self._parse_json_dict(frame_raw)
         t_action = self._parse_int(t_raw)
-        use_recorded_reference = self._parse_bool(use_recorded_reference_raw)
+        self._publish_one_shot_events(event_raw_values)
 
         if t_action is not None:
             self._check_staleness(t_action)
-
-        msg = Bool()
-        msg.data = use_recorded_reference
-        self.pub_use_recorded_reference.publish(msg)
 
         if self._is_stale_retarget_frame(retarget_frame, t_action):
             self._seed_default_redis_frame()
@@ -254,6 +273,38 @@ class RedisToRos2Bridge(Node):
             self.pub_retarget_frame.publish(msg)
 
         self._debug_log(retarget_frame, t_action)
+
+    def _publish_one_shot_events(self, raw_values: list[Any]) -> None:
+        triggered = []
+        for (event_name, redis_key), raw_value in zip(self.gmr_event_keys.items(), raw_values):
+            if not self._parse_bool(raw_value):
+                continue
+            msg = Bool()
+            msg.data = True
+            self.gmr_event_publishers[event_name].publish(msg)
+            self.get_logger().info(f"[GMR TOPIC] published {GMR_EVENT_TOPICS[event_name]} data=True")
+            triggered.append((event_name, redis_key))
+
+        if not triggered:
+            return
+
+        mset_args = []
+        for _, redis_key in triggered:
+            mset_args.extend([redis_key, "false"])
+        try:
+            self.client.command("MSET", *mset_args)
+        except Exception as exc:
+            self.client.close()
+            self.get_logger().warning(f"Failed to clear one-shot Redis events: {exc}")
+            return
+
+        self.get_logger().info(
+            "[GMR EVENT] published "
+            + ", ".join(
+                f"{event_name}->{GMR_EVENT_TOPICS[event_name]}"
+                for event_name, _ in triggered
+            )
+        )
 
     def _debug_log(
         self,
@@ -433,8 +484,6 @@ class RedisToRos2Bridge(Node):
                 json.dumps(self.default_retarget_frame, separators=(",", ":")),
             )
             self.client.command("SET", self.redis_keys["t_action"], str(now_ms))
-            if force:
-                self.client.command("SET", self.redis_keys["use_recorded_reference"], "false")
             self._last_default_seed_time = now
             if force:
                 self.get_logger().info("Seeded Redis retarget keys with default frame")
