@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# for kimodo g1 or bones seed g1 dataset to igris c
+
 PYTHON_BIN="${PYTHON_BIN:-python3}"
-G1_MOTION_PATH="${G1_MOTION_PATH:-/home/robros/workspace/kimodo/rolling.npz}"
-SAVE_PATH="${SAVE_PATH:-/home/robros/workspace/kimodo/rolling.pkl}"
+G1_MOTION_PATH="${G1_MOTION_PATH:-/home/robros/workspace/motion_datas/bones_seed_g1_npz/210531/jump_and_land_heavy_001__A001.npz}"
+SAVE_PATH="${SAVE_PATH:-/home/robros/workspace/motion_datas/retargeted/g1_to_igris_c/test.pkl}"
 ROOT_QUAT_SCALAR_FIRST="${ROOT_QUAT_SCALAR_FIRST:-true}"
 MOTION_FPS="${MOTION_FPS:-30}"
 NO_VIEWER="${NO_VIEWER:-0}"
