@@ -70,6 +70,17 @@ python script/pack_retargeted_motions.py --<dir>
 PYTHON_BIN=/usr/bin/python3 bash scripts/run_ros2_redis_bridge.sh
 ```
 
+## On-board execution
+* run xrobot toolkit bia terminal
+```
+nohup bash /opt/apps/roboticsservice/runService.sh >/dev/null 2>&1 &
+```
+* run `retarget_teleop.sh` with `--headless` option
+* run web debug
+```python scripts/pico_web_debug.py --ros-domain-id <ROS_DOMAIN_ID> --port <optional>```
+
+
+
 # Motion View & Curation
 * single motion, directory, single packed motion 선택해서 view 할 수 있음
 
