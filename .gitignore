@@ -24,6 +24,8 @@ coverage.xml
 # IDEs
 .vscode/
 .idea/
+.codex
+.codex/
 *.swp
 *.swo
 *~
@@ -80,6 +82,7 @@ body_models/
 
 # Logs
 MUJOCO_LOG.TXT
+MJDATA.TXT
 *.log
 
 # Session files
@@ -95,6 +98,10 @@ session*.json
 build/
 dist/
 *.egg-info/
+mjmodel.mjb
+
+# Vendored web assets
+public/fonts/
 
 # Environment files
 .env
