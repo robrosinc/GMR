@@ -9,6 +9,7 @@ import argparse
 import ast
 import json
 import os
+import socket
 import sys
 import threading
 import time
@@ -80,7 +81,7 @@ HTML = r"""<!doctype html>
     body { overflow: hidden; }
     #hud { position: fixed; left: 16px; top: 12px; z-index: 2; font-size: 14px; line-height: 1.45; color: #d5dde5; }
     #hud b { color: #ffffff; }
-    #canvas { display: block; width: 100vw; height: 100vh; }
+    #canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
     #empty { position: fixed; inset: 0; display: grid; place-items: center; color: #8b949e; font-size: 18px; pointer-events: none; }
   </style>
 </head>
@@ -89,7 +90,7 @@ HTML = r"""<!doctype html>
   <div id="hud">
     <div><b>PICO Retarget Debug</b></div>
     <div id="status">connecting...</div>
-    <div>drag: rotate, wheel: zoom</div>
+    <div>drag: rotate, wheel/pinch: zoom</div>
   </div>
   <div id="empty">waiting for keybody positions</div>
   <script>
@@ -101,9 +102,9 @@ HTML = r"""<!doctype html>
     let yaw = -0.75;
     let pitch = -0.35;
     let zoom = 190;
-    let dragging = false;
-    let lastX = 0;
-    let lastY = 0;
+    const pointers = new Map();
+    let lastDrag = null;
+    let lastPinchDistance = null;
 
     function resize() {
       const dpr = window.devicePixelRatio || 1;
@@ -114,20 +115,68 @@ HTML = r"""<!doctype html>
     window.addEventListener("resize", resize);
     resize();
 
-    canvas.addEventListener("mousedown", (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; });
-    window.addEventListener("mouseup", () => { dragging = false; });
-    window.addEventListener("mousemove", (e) => {
-      if (!dragging) return;
-      yaw += (e.clientX - lastX) * 0.008;
-      pitch += (e.clientY - lastY) * 0.008;
-      pitch = Math.max(-1.45, Math.min(1.45, pitch));
-      lastX = e.clientX;
-      lastY = e.clientY;
+    function clampZoom() {
+      zoom = Math.max(60, Math.min(600, zoom));
+    }
+
+    function pointerDistance() {
+      const pts = Array.from(pointers.values());
+      if (pts.length < 2) return null;
+      return Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+    }
+
+    canvas.addEventListener("pointerdown", (e) => {
+      canvas.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 1) {
+        lastDrag = { x: e.clientX, y: e.clientY };
+        lastPinchDistance = null;
+      } else if (pointers.size === 2) {
+        lastDrag = null;
+        lastPinchDistance = pointerDistance();
+      }
     });
+
+    canvas.addEventListener("pointermove", (e) => {
+      if (!pointers.has(e.pointerId)) return;
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 1 && lastDrag) {
+        yaw += (e.clientX - lastDrag.x) * 0.008;
+        pitch -= (e.clientY - lastDrag.y) * 0.008;
+        pitch = Math.max(-1.45, Math.min(1.45, pitch));
+        lastDrag = { x: e.clientX, y: e.clientY };
+        return;
+      }
+      if (pointers.size === 2) {
+        const distance = pointerDistance();
+        if (distance !== null && lastPinchDistance !== null && lastPinchDistance > 0) {
+          zoom *= distance / lastPinchDistance;
+          clampZoom();
+        }
+        lastPinchDistance = distance;
+      }
+    });
+
+    function releasePointer(e) {
+      pointers.delete(e.pointerId);
+      if (pointers.size === 1) {
+        const p = Array.from(pointers.values())[0];
+        lastDrag = { x: p.x, y: p.y };
+        lastPinchDistance = null;
+      } else {
+        lastDrag = null;
+        lastPinchDistance = null;
+      }
+    }
+
+    canvas.addEventListener("pointerup", releasePointer);
+    canvas.addEventListener("pointercancel", releasePointer);
+    canvas.addEventListener("lostpointercapture", releasePointer);
+
     canvas.addEventListener("wheel", (e) => {
       e.preventDefault();
       zoom *= Math.exp(-e.deltaY * 0.001);
-      zoom = Math.max(60, Math.min(600, zoom));
+      clampZoom();
     }, { passive: false });
 
     const source = new EventSource("/events");
@@ -207,10 +256,19 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--topic", default="/gmr/teleop/retarget_frame")
     parser.add_argument("--ros_domain_id", "--ros-domain-id", type=int, default=None)
-    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--host", default=None)
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--update_hz", "--update-hz", type=float, default=20.0)
     return parser.parse_args()
+
+
+def detect_host_ip() -> str:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            return sock.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
 
 
 def parse_payload(raw: str) -> dict[str, Any] | None:
@@ -335,6 +393,7 @@ def make_handler(latest: LatestFrame, update_hz: float):
 
 def main() -> None:
     args = parse_args()
+    host = args.host or detect_host_ip()
     if args.ros_domain_id is not None:
         os.environ["ROS_DOMAIN_ID"] = str(args.ros_domain_id)
 
@@ -367,10 +426,10 @@ def main() -> None:
 
     rclpy.init()
     node = RetargetFrameSubscriber()
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(latest, args.update_hz))
+    server = ThreadingHTTPServer((host, args.port), make_handler(latest, args.update_hz))
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
-    print(f"Open http://{args.host}:{args.port}")
+    print(f"Open http://{host}:{args.port}")
 
     try:
         rclpy.spin(node)
