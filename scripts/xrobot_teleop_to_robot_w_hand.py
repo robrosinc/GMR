@@ -1456,7 +1456,7 @@ class XRobotTeleopToRobot:
         frame = cv2.cvtColor(pixels, cv2.COLOR_RGB2BGR)
         self.video_writer.write(frame)
         
-    def handle_exit_sequence(self, viewer):
+    def handle_exit_sequence(self, viewer=None):
         """Handle graceful exit with interpolation to default pose"""
         if self.state_machine.current_mimic_obs is not None:
             default_obs = self.default_mimic_obs
@@ -1471,7 +1471,8 @@ class XRobotTeleopToRobot:
                     # During exit sequence, send default neck position [0, 0]
                     neck_data_to_send = self.determine_neck_data_to_send(None)
                     self.send_to_redis(interp_obs, neck_data_to_send)
-                viewer.sync()
+                if viewer is not None:
+                    viewer.sync()
                 self.rate.sleep()
                 
 
@@ -1530,88 +1531,91 @@ class XRobotTeleopToRobot:
 
         print("Ready to receive teleop data.")
 
+    def run_once(self, viewer=None):
+        """Run one teleop iteration. Returns False when exit is requested."""
+        smplx_data, left_hand_data, right_hand_data, controller_data, headset_data = self.get_teleop_data()
+
+        if controller_data is not None:
+            self.state_machine.update(controller_data)
+            self.update_motion_recording_toggle(controller_data)
+            self.publish_one_shot_gmr_events(controller_data)
+            self.send_controller_data_to_redis(controller_data)
+
+        if self.state_machine.should_exit():
+            print("Exit requested via controller")
+            self.handle_exit_sequence(viewer)
+            return False
+
+        self.maybe_auto_start_teleop(smplx_data)
+
+        qpos, current_retarget_obs = None, None
+        if smplx_data is not None:
+            qpos, current_retarget_obs = self.process_retargeting(smplx_data)
+            if viewer is not None:
+                self.update_visualization(
+                    qpos,
+                    smplx_data,
+                    left_hand_data,
+                    right_hand_data,
+                    viewer,
+                )
+            self.record_motion_frame(
+                qpos,
+                body_data=smplx_data,
+                left_hand_data=left_hand_data,
+                right_hand_data=right_hand_data,
+                controller_data=controller_data,
+                headset_data=headset_data,
+                sdk_raw_data=self.current_raw_xrobot_data,
+            )
+
+        self.handle_state_transitions(current_retarget_obs)
+
+        mimic_obs_to_send = self.determine_mimic_obs_to_send(current_retarget_obs)
+        neck_data_to_send = self.determine_neck_data_to_send(smplx_data)
+
+        if neck_data_to_send is not None:
+            self.state_machine.set_current_neck_data(neck_data_to_send)
+
+        self.send_to_redis(
+            mimic_obs_to_send,
+            neck_data_to_send,
+            qpos=qpos,
+            controller_data=controller_data,
+        )
+
+        if viewer is not None:
+            viewer.sync()
+            self.record_video_frame(viewer)
+
+        self.fps_monitor.tick()
+        self.rate.sleep()
+        return True
+
     def run(self):
         """Main execution loop"""
         self.initialize_all_systems()
-        
-        # Start the viewer
-        with mjv.launch_passive(
-            model=self.model, 
-            data=self.data, 
-            show_left_ui=False, 
-            show_right_ui=False
-        ) as viewer:
-            viewer.opt.flags[mj.mjtVisFlag.mjVIS_TRANSPARENT] = 1
-            
-            while viewer.is_running():
-                # Get current teleop data
-                smplx_data, left_hand_data, right_hand_data, controller_data, headset_data = self.get_teleop_data()
-                
-                # Update state machine
-                if controller_data is not None:
-                    self.state_machine.update(controller_data)
-                    self.update_motion_recording_toggle(controller_data)
-                    self.publish_one_shot_gmr_events(controller_data)
-                    self.send_controller_data_to_redis(controller_data)
-                
-                # Check if we should exit
-                if self.state_machine.should_exit():
-                    print("Exit requested via controller")
-                    self.handle_exit_sequence(viewer)
-                    break
 
-                # Auto-start teleop once motion data appears.
-                self.maybe_auto_start_teleop(smplx_data)
-                
-                # Process retargeting if we have data
-                qpos, current_retarget_obs = None, None
-                if smplx_data is not None:
-                    qpos, current_retarget_obs = self.process_retargeting(smplx_data)
-                    self.update_visualization(
-                        qpos,
-                        smplx_data,
-                        left_hand_data,
-                        right_hand_data,
-                        viewer,
-                    )
-                    self.record_motion_frame(
-                        qpos,
-                        body_data=smplx_data,
-                        left_hand_data=left_hand_data,
-                        right_hand_data=right_hand_data,
-                        controller_data=controller_data,
-                        headset_data=headset_data,
-                        sdk_raw_data=self.current_raw_xrobot_data,
-                    )
-                
-                # Handle state transitions
-                self.handle_state_transitions(current_retarget_obs)
-                
-                # Determine and send mimic observations
-                mimic_obs_to_send = self.determine_mimic_obs_to_send(current_retarget_obs)
-                neck_data_to_send = self.determine_neck_data_to_send(smplx_data)
-                
-                # Store current neck data in state machine for pause state handling
-                if neck_data_to_send is not None:
-                    self.state_machine.set_current_neck_data(neck_data_to_send)
-                
-                self.send_to_redis(
-                    mimic_obs_to_send,
-                    neck_data_to_send,
-                    qpos=qpos,
-                    controller_data=controller_data,
-                )
-                
-                # Update visualization and record video
-                viewer.sync()
-                self.record_video_frame(viewer)
-                
-                # FPS monitoring
-                self.fps_monitor.tick()
-                
-                self.rate.sleep()
-
-            # Save remaining frames when viewer exits.
+        try:
+            if self.args.headless:
+                print("Headless mode enabled: MuJoCo viewer will not be launched.")
+                while True:
+                    if not self.run_once():
+                        break
+            else:
+                with mjv.launch_passive(
+                    model=self.model,
+                    data=self.data,
+                    show_left_ui=False,
+                    show_right_ui=False,
+                ) as viewer:
+                    viewer.opt.flags[mj.mjtVisFlag.mjVIS_TRANSPARENT] = 1
+                    while viewer.is_running():
+                        if not self.run_once(viewer):
+                            break
+        except KeyboardInterrupt:
+            print("Interrupted by keyboard")
+        finally:
             if self.motion_collecting:
                 self.save_motion_chunk(force=True)
 
@@ -1684,6 +1688,11 @@ def parse_arguments():
         type=int,
         default=0,
         help="Measure and print detailed FPS statistics (0=disabled, 1=enabled).",
+    )
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="Run retarget teleop without launching the MuJoCo viewer.",
     )
     parser.add_argument(
         "--retarget_velocity_lpf_enabled",
