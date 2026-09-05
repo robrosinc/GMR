@@ -1,6 +1,8 @@
 import argparse
 import copy
+import multiprocessing as mp
 import pickle
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -218,6 +220,7 @@ def retarget_raw_pico_file(
     actual_human_height: float,
     fps_override: float | None,
     overwrite: bool,
+    show_frame_progress: bool = True,
 ) -> Path | None:
     output_path = output_path_for_raw_file(raw_path, raw_pico_dir, output_dir)
     if output_path.exists() and not overwrite:
@@ -242,7 +245,12 @@ def retarget_raw_pico_file(
 
     qpos_list = []
     dropped_frames = 0
-    for frame in tqdm(frames, desc=raw_path.name, leave=False):
+    for frame in tqdm(
+        frames,
+        desc=raw_path.name,
+        leave=False,
+        disable=not show_frame_progress,
+    ):
         if not isinstance(frame, dict):
             dropped_frames += 1
             continue
@@ -281,6 +289,32 @@ def retarget_raw_pico_file(
     return output_path
 
 
+def retarget_raw_pico_file_safe(
+    raw_path: Path,
+    raw_pico_dir: Path,
+    output_dir: Path,
+    robot: str,
+    actual_human_height: float,
+    fps_override: float | None,
+    overwrite: bool,
+) -> tuple[Path, Path | None, str | None]:
+    """Retarget one recording and return errors to the parent process."""
+    try:
+        output_path = retarget_raw_pico_file(
+            raw_path=raw_path,
+            raw_pico_dir=raw_pico_dir,
+            output_dir=output_dir,
+            robot=robot,
+            actual_human_height=actual_human_height,
+            fps_override=fps_override,
+            overwrite=overwrite,
+            show_frame_progress=False,
+        )
+        return raw_path, output_path, None
+    except Exception as exc:
+        return raw_path, None, f"{type(exc).__name__}: {exc}"
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Offline retarget saved raw PICO/XRobot data to GMR robot motion pkl files."
@@ -304,6 +338,12 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Override output fps. Defaults to raw metadata or timestamp estimate.",
     )
+    parser.add_argument(
+        "--num_workers",
+        type=int,
+        default=1,
+        help="Number of recordings to retarget concurrently. Use 1 to disable multiprocessing.",
+    )
     parser.add_argument("--overwrite", action="store_true")
     return parser.parse_args()
 
@@ -318,24 +358,53 @@ def main() -> None:
     raw_files = collect_raw_pico_files(raw_pico_dir)
     if not raw_files:
         raise FileNotFoundError(f"No .pkl files found under {raw_pico_dir}")
+    if args.num_workers < 1:
+        raise ValueError(f"--num_workers must be at least 1, got {args.num_workers}")
 
     saved_count = 0
     skipped_count = 0
-    for raw_path in tqdm(raw_files, desc="PICO offline retarget"):
-        output_path = retarget_raw_pico_file(
-            raw_path=raw_path,
-            raw_pico_dir=raw_pico_dir,
-            output_dir=output_dir,
-            robot=args.robot,
-            actual_human_height=args.actual_human_height,
-            fps_override=args.motion_fps,
-            overwrite=args.overwrite,
+    failures: list[tuple[Path, str]] = []
+    worker = partial(
+        retarget_raw_pico_file_safe,
+        raw_pico_dir=raw_pico_dir,
+        output_dir=output_dir,
+        robot=args.robot,
+        actual_human_height=args.actual_human_height,
+        fps_override=args.motion_fps,
+        overwrite=args.overwrite,
+    )
+
+    if args.num_workers == 1:
+        results = (
+            worker(raw_path)
+            for raw_path in tqdm(raw_files, desc="PICO offline retarget")
         )
-        if output_path is None:
-            skipped_count += 1
-        else:
-            saved_count += 1
-            print(f"Saved {output_path}")
+    else:
+        pool = mp.Pool(processes=args.num_workers)
+        results = tqdm(
+            pool.imap_unordered(worker, raw_files),
+            total=len(raw_files),
+            desc=f"PICO offline retarget ({args.num_workers} workers)",
+        )
+
+    try:
+        for raw_path, output_path, error in results:
+            if error is not None:
+                failures.append((raw_path, error))
+                print(f"[red]Failed {raw_path}:[/red] {error}")
+                continue
+            if output_path is None:
+                skipped_count += 1
+            else:
+                saved_count += 1
+                print(f"Saved {output_path}")
+    finally:
+        if args.num_workers > 1:
+            pool.close()
+            pool.join()
+
+    if failures:
+        raise RuntimeError(f"{len(failures)} of {len(raw_files)} files failed to retarget.")
 
     print(
         f"Done. saved={saved_count}, skipped={skipped_count}, "
