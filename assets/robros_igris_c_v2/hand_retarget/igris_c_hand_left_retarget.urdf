@@ -1,0 +1,257 @@
+<?xml version="1.0"?>
+<!--
+  Retargeting-only kinematic model of the IGRIS-C v2 LEFT hand for
+  dex-retargeting (DexPilot). NOT a simulation asset: the sim loads USD built
+  from igris_c_v2_wrist_hand_isaac.urdf; this file exists because
+  dex_retargeting loads a URDF whole via pinocchio and needs (a) a hand-only
+  kinematic tree rooted at the palm and (b) fingertip frames, neither of which
+  the full-body URDF provides.
+
+  Joints and link inertials are copied verbatim from
+  igris_c_v2_wrist_hand_isaac.urdf (hand section). Geometry is intentionally
+  omitted (retargeting parses kinematics only). Distal joints carry <mimic>
+  tags mirroring DISTAL_COUPLING in
+  source/embodiments/igris_c/controllers/auxiliary_joint_layout.py so the
+  optimizer's fingertip FK reflects the coupled curl while only the six
+  actuated joints are retarget targets.
+-->
+<robot name="igris_c_left_hand_retarget">
+  <link name="Left_Hand">
+    <inertial>
+      <mass value="0.1" />
+      <origin xyz="0 0 0" />
+      <inertia ixx="1e-04" ixy="0" ixz="0" iyy="1e-04" iyz="0" izz="1e-04" />
+    </inertial>
+  </link>
+
+  <link name="l_thumb_proximal">
+    <inertial>
+      <mass value="0.01" />
+      <origin xyz="0 0 0" />
+      <inertia ixx="1e-05" ixy="0" ixz="0" iyy="1e-05" iyz="0" izz="1e-05" />
+    </inertial>
+  </link>
+  <link name="l_thumb_middle">
+    <inertial>
+      <mass value="0.008" />
+      <origin xyz="0 0 0" />
+      <inertia ixx="8e-06" ixy="0" ixz="0" iyy="8e-06" iyz="0" izz="8e-06" />
+    </inertial>
+  </link>
+  <link name="l_thumb_distal">
+    <inertial>
+      <mass value="0.006" />
+      <origin xyz="0 0 0" />
+      <inertia ixx="6e-06" ixy="0" ixz="0" iyy="6e-06" iyz="0" izz="6e-06" />
+    </inertial>
+  </link>
+  <link name="l_index_middle">
+    <inertial>
+      <mass value="0.008" />
+      <origin xyz="0 0 0" />
+      <inertia ixx="8e-06" ixy="0" ixz="0" iyy="8e-06" iyz="0" izz="8e-06" />
+    </inertial>
+  </link>
+  <link name="l_index_distal">
+    <inertial>
+      <mass value="0.006" />
+      <origin xyz="0 0 0" />
+      <inertia ixx="6e-06" ixy="0" ixz="0" iyy="6e-06" iyz="0" izz="6e-06" />
+    </inertial>
+  </link>
+  <link name="l_middle_middle">
+    <inertial>
+      <mass value="0.008" />
+      <origin xyz="0 0 0" />
+      <inertia ixx="8e-06" ixy="0" ixz="0" iyy="8e-06" iyz="0" izz="8e-06" />
+    </inertial>
+  </link>
+  <link name="l_middle_distal">
+    <inertial>
+      <mass value="0.006" />
+      <origin xyz="0 0 0" />
+      <inertia ixx="6e-06" ixy="0" ixz="0" iyy="6e-06" iyz="0" izz="6e-06" />
+    </inertial>
+  </link>
+  <link name="l_ring_middle">
+    <inertial>
+      <mass value="0.008" />
+      <origin xyz="0 0 0" />
+      <inertia ixx="8e-06" ixy="0" ixz="0" iyy="8e-06" iyz="0" izz="8e-06" />
+    </inertial>
+  </link>
+  <link name="l_ring_distal">
+    <inertial>
+      <mass value="0.006" />
+      <origin xyz="0 0 0" />
+      <inertia ixx="6e-06" ixy="0" ixz="0" iyy="6e-06" iyz="0" izz="6e-06" />
+    </inertial>
+  </link>
+  <link name="l_little_middle">
+    <inertial>
+      <mass value="0.008" />
+      <origin xyz="0 0 0" />
+      <inertia ixx="8e-06" ixy="0" ixz="0" iyy="8e-06" iyz="0" izz="8e-06" />
+    </inertial>
+  </link>
+  <link name="l_little_distal">
+    <inertial>
+      <mass value="0.006" />
+      <origin xyz="0 0 0" />
+      <inertia ixx="6e-06" ixy="0" ixz="0" iyy="6e-06" iyz="0" izz="6e-06" />
+    </inertial>
+  </link>
+
+  <!--
+    TIP OFFSET MEASURED FROM MESH BOUNDS, PENDING HUMAN CONFIRMATION:
+    finger_distal.stl spans z in [-0.0064, 0.0403] and l_thumb_distal.stl
+    z in [-0.0063, 0.0399] at URDF scale 0.01, so the tip frame sits at
+    local z = 0.040 on every distal link. The lateral pad offset is ignored
+    (mesh is near-centered in x/y). Tip placement trades off against the
+    DexPilot scaling_factor; confirm both together during offline replay.
+  -->
+  <link name="l_thumb_tip">
+    <inertial>
+      <mass value="0.001" />
+      <origin xyz="0 0 0" />
+      <inertia ixx="1e-06" ixy="0" ixz="0" iyy="1e-06" iyz="0" izz="1e-06" />
+    </inertial>
+  </link>
+  <link name="l_index_tip">
+    <inertial>
+      <mass value="0.001" />
+      <origin xyz="0 0 0" />
+      <inertia ixx="1e-06" ixy="0" ixz="0" iyy="1e-06" iyz="0" izz="1e-06" />
+    </inertial>
+  </link>
+  <link name="l_middle_tip">
+    <inertial>
+      <mass value="0.001" />
+      <origin xyz="0 0 0" />
+      <inertia ixx="1e-06" ixy="0" ixz="0" iyy="1e-06" iyz="0" izz="1e-06" />
+    </inertial>
+  </link>
+  <link name="l_ring_tip">
+    <inertial>
+      <mass value="0.001" />
+      <origin xyz="0 0 0" />
+      <inertia ixx="1e-06" ixy="0" ixz="0" iyy="1e-06" iyz="0" izz="1e-06" />
+    </inertial>
+  </link>
+  <link name="l_little_tip">
+    <inertial>
+      <mass value="0.001" />
+      <origin xyz="0 0 0" />
+      <inertia ixx="1e-06" ixy="0" ixz="0" iyy="1e-06" iyz="0" izz="1e-06" />
+    </inertial>
+  </link>
+
+  <joint name="l_0_joint_thumb_proximal" type="revolute">
+    <parent link="Left_Hand" />
+    <child link="l_thumb_proximal" />
+    <origin rpy="-0.087265666 0 0" xyz="0.026 0.0132 0.0299" />
+    <axis xyz="0 0 1" />
+    <limit effort="1000" lower="0" upper="1.727875959" velocity="100.0" />
+  </joint>
+  <joint name="l_1_joint_thumb_middle" type="revolute">
+    <parent link="l_thumb_proximal" />
+    <child link="l_thumb_middle" />
+    <origin rpy="-1.221731311 0 -1.570796752" xyz="0.0230 0.0036 0.015" />
+    <axis xyz="1 0 0" />
+    <limit effort="1000" lower="0" upper="1.221730476" velocity="100.0" />
+  </joint>
+  <joint name="l_2_joint_thumb_distal" type="revolute">
+    <parent link="l_thumb_middle" />
+    <child link="l_thumb_distal" />
+    <origin rpy="0 0 0" xyz="0 -0.001 0.04" />
+    <axis xyz="1 0 0" />
+    <limit effort="1000" lower="0" upper="1.570796327" velocity="100.0" />
+    <mimic joint="l_1_joint_thumb_middle" multiplier="1.285714286" offset="0" />
+  </joint>
+  <joint name="l_3_joint_index_middle" type="revolute">
+    <parent link="Left_Hand" />
+    <child link="l_index_middle" />
+    <origin rpy="0 0 3.141592654" xyz="0.0305 -0.002 0.101" />
+    <axis xyz="1 0 0" />
+    <limit effort="1000" lower="0" upper="1.570796327" velocity="100.0" />
+  </joint>
+  <joint name="l_4_joint_index_distal" type="revolute">
+    <parent link="l_index_middle" />
+    <child link="l_index_distal" />
+    <origin rpy="0 0 0" xyz="0 -0.001 0.04" />
+    <axis xyz="1 0 0" />
+    <limit effort="1000" lower="0" upper="1.570796327" velocity="100.0" />
+    <mimic joint="l_3_joint_index_middle" multiplier="1.0" offset="0" />
+  </joint>
+  <joint name="l_5_joint_middle_middle" type="revolute">
+    <parent link="Left_Hand" />
+    <child link="l_middle_middle" />
+    <origin rpy="0 0 3.141592654" xyz="0.0085 -0.002 0.101" />
+    <axis xyz="1 0 0" />
+    <limit effort="1000" lower="0" upper="1.570796327" velocity="100.0" />
+  </joint>
+  <joint name="l_6_joint_middle_distal" type="revolute">
+    <parent link="l_middle_middle" />
+    <child link="l_middle_distal" />
+    <origin rpy="0 0 0" xyz="0 -0.001 0.04" />
+    <axis xyz="1 0 0" />
+    <limit effort="1000" lower="0" upper="1.570796327" velocity="100.0" />
+    <mimic joint="l_5_joint_middle_middle" multiplier="1.0" offset="0" />
+  </joint>
+  <joint name="l_7_joint_ring_middle" type="revolute">
+    <parent link="Left_Hand" />
+    <child link="l_ring_middle" />
+    <origin rpy="0 0 3.141592654" xyz="-0.0135 -0.002 0.101" />
+    <axis xyz="1 0 0" />
+    <limit effort="1000" lower="0" upper="1.570796327" velocity="100.0" />
+  </joint>
+  <joint name="l_8_joint_ring_distal" type="revolute">
+    <parent link="l_ring_middle" />
+    <child link="l_ring_distal" />
+    <origin rpy="0 0 0" xyz="0 -0.001 0.04" />
+    <axis xyz="1 0 0" />
+    <limit effort="1000" lower="0" upper="1.570796327" velocity="100.0" />
+    <mimic joint="l_7_joint_ring_middle" multiplier="1.0" offset="0" />
+  </joint>
+  <joint name="l_9_joint_little_middle" type="revolute">
+    <parent link="Left_Hand" />
+    <child link="l_little_middle" />
+    <origin rpy="0 0 3.141592654" xyz="-0.0355 -0.002 0.101" />
+    <axis xyz="1 0 0" />
+    <limit effort="1000" lower="0" upper="1.570796327" velocity="100.0" />
+  </joint>
+  <joint name="l_10_joint_little_distal" type="revolute">
+    <parent link="l_little_middle" />
+    <child link="l_little_distal" />
+    <origin rpy="0 0 0" xyz="0 -0.001 0.04" />
+    <axis xyz="1 0 0" />
+    <limit effort="1000" lower="0" upper="1.570796327" velocity="100.0" />
+    <mimic joint="l_9_joint_little_middle" multiplier="1.0" offset="0" />
+  </joint>
+
+  <joint name="l_thumb_tip_joint" type="fixed">
+    <parent link="l_thumb_distal" />
+    <child link="l_thumb_tip" />
+    <origin rpy="0 0 0" xyz="0 0 0.04" />
+  </joint>
+  <joint name="l_index_tip_joint" type="fixed">
+    <parent link="l_index_distal" />
+    <child link="l_index_tip" />
+    <origin rpy="0 0 0" xyz="0 0 0.04" />
+  </joint>
+  <joint name="l_middle_tip_joint" type="fixed">
+    <parent link="l_middle_distal" />
+    <child link="l_middle_tip" />
+    <origin rpy="0 0 0" xyz="0 0 0.04" />
+  </joint>
+  <joint name="l_ring_tip_joint" type="fixed">
+    <parent link="l_ring_distal" />
+    <child link="l_ring_tip" />
+    <origin rpy="0 0 0" xyz="0 0 0.04" />
+  </joint>
+  <joint name="l_little_tip_joint" type="fixed">
+    <parent link="l_little_distal" />
+    <child link="l_little_tip" />
+    <origin rpy="0 0 0" xyz="0 0 0.04" />
+  </joint>
+</robot>

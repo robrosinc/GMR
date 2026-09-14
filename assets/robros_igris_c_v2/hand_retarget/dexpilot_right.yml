@@ -1,0 +1,33 @@
+# dex-retargeting (DexPilot) config for the IGRIS-C v2 RIGHT hand.
+# Loaded by general_motion_retargeting.hand_retarget.igris_c_hand.IgrisHandRetargeter,
+# which overrides urdf_path with the absolute path resolved from this file's
+# directory (no reliance on the library's process-global default URDF dir).
+retargeting:
+  type: DexPilot
+  urdf_path: igris_c_hand_right_retarget.urdf
+  wrist_link_name: Right_Hand
+  # ORDER CONTRACT: thumb, index, middle, ring, little. DexPilotOptimizer
+  # derives the MANO human indices as multiples of 4 from this order
+  # (dex_retargeting optimizer.py, generate_link_indices); reordering breaks
+  # the human-robot correspondence silently.
+  finger_tip_link_names:
+    - r_thumb_tip
+    - r_index_tip
+    - r_middle_tip
+    - r_ring_tip
+    - r_little_tip
+  # The six actuated joints (igris_c_layout.ACTIVE_HAND_JOINT_NAMES right
+  # slice); distal joints follow via their URDF mimic tags and are driven by
+  # the consumer through DISTAL_COUPLING, so they must not be targets here.
+  target_joint_names:
+    - r_0_joint_thumb_proximal
+    - r_1_joint_thumb_middle
+    - r_3_joint_index_middle
+    - r_5_joint_middle_middle
+    - r_7_joint_ring_middle
+    - r_9_joint_little_middle
+  # Tuning knobs, to be validated against offline replay recordings (human
+  # sign-off): scaling_factor absorbs human-vs-robot hand size (references
+  # use 1.0-1.2), low_pass_alpha is the output low-pass filter.
+  scaling_factor: 1.1
+  low_pass_alpha: 0.2
