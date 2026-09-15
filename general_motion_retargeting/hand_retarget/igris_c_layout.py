@@ -6,7 +6,9 @@ order, hit-bench's Isaac auxiliary controller consumes the same order, and the
 distal finger joints follow their actuated middle joint through
 ``DISTAL_COUPLING``. Moved here from hit-bench
 ``source/embodiments/igris_c/controllers/auxiliary_joint_layout.py`` (values
-unchanged) so that the hand retargeter and its consumers share one definition.
+unchanged) so that the hand command producers and their consumers share one
+definition. The normalized 12-motor hand command lives in
+``igris_c_hand_command``.
 """
 
 from __future__ import annotations

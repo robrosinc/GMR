@@ -1,11 +1,41 @@
-"""IGRIS-C hand (finger) retargeting side channel.
+"""IGRIS-C hand (finger) command side channel.
 
-Only the layout constants are re-exported here so that importing this package
-never loads torch/dex_retargeting; import the solver explicitly:
-
-    from general_motion_retargeting.hand_retarget.igris_c_hand import IgrisHandRetargeter
+``igris_c_layout`` holds the joint names shared with the simulator's auxiliary
+controller; ``igris_c_hand_command`` defines the normalized 12-motor hand
+command (0 = open, 1 = closed, ``rt/handcmd`` motor-ID order), derives it from
+OpenXR hand keypoints or controller grip, arbitrates between the two per hand,
+and converts it to simulator joint targets. Pure numpy; importing this package
+never loads torch or an IK solver.
 """
 
+from .igris_c_hand_command import (
+    CMC_CLOSED_POS_RAD,
+    CONTROLLER_ACTIVITY_THRESHOLD,
+    DEFAULT_CALIBRATION,
+    GRIP_FULL_COMMAND,
+    HAND_COMMAND_DIM,
+    HAND_SLOT_LABELS,
+    HAND_SOURCES,
+    JOINT_CLOSED_POS_RAD,
+    JOINT_OPEN_POS_RAD,
+    JOINT_TO_MOTOR_SLOT,
+    LEFT_MOTOR_SLOTS,
+    MOTOR_ID_TO_JOINT,
+    MOTOR_IDS,
+    MOTOR_SLOT_LABELS,
+    MOTOR_SLOT_TO_JOINT,
+    RIGHT_MOTOR_SLOTS,
+    SIDE_MOTOR_SLOTS,
+    FingerCurlCalibration,
+    HandCommandState,
+    HandSourceArbiter,
+    grip_to_normalized,
+    hand_keypoints_to_normalized,
+    hand_raw_angles,
+    layout_order_to_motor_order,
+    motor_order_to_layout_order,
+    normalized_to_joint_targets,
+)
 from .igris_c_layout import (
     ACTIVE_HAND_JOINT_NAMES,
     AUXILIARY_JOINT_NAMES,
@@ -21,11 +51,37 @@ from .igris_c_layout import (
 __all__ = [
     "ACTIVE_HAND_JOINT_NAMES",
     "AUXILIARY_JOINT_NAMES",
+    "CMC_CLOSED_POS_RAD",
+    "CONTROLLER_ACTIVITY_THRESHOLD",
+    "DEFAULT_CALIBRATION",
     "DISTAL_COUPLING",
     "FIST_JOINT_POS_RAD",
+    "FingerCurlCalibration",
+    "GRIP_FULL_COMMAND",
+    "HAND_COMMAND_DIM",
+    "HAND_SLOT_LABELS",
+    "HAND_SOURCES",
+    "HandCommandState",
+    "HandSourceArbiter",
+    "JOINT_CLOSED_POS_RAD",
+    "JOINT_OPEN_POS_RAD",
+    "JOINT_TO_MOTOR_SLOT",
     "LEFT_HAND_JOINT_NAMES",
+    "LEFT_MOTOR_SLOTS",
+    "MOTOR_IDS",
+    "MOTOR_ID_TO_JOINT",
+    "MOTOR_SLOT_LABELS",
+    "MOTOR_SLOT_TO_JOINT",
     "NECK_JOINT_NAMES",
     "RIGHT_HAND_JOINT_NAMES",
+    "RIGHT_MOTOR_SLOTS",
+    "SIDE_MOTOR_SLOTS",
     "WRIST_JOINT_NAMES",
     "grip_hand_joint_targets",
+    "grip_to_normalized",
+    "hand_keypoints_to_normalized",
+    "hand_raw_angles",
+    "layout_order_to_motor_order",
+    "motor_order_to_layout_order",
+    "normalized_to_joint_targets",
 ]

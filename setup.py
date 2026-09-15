@@ -28,10 +28,5 @@ setup(
     "redis[hiredis]",
     "imageio[ffmpeg]",
   ],
-  extras_require={
-    # general_motion_retargeting.hand_retarget.igris_c_hand (DexPilot finger
-    # retargeting). dex-retargeting 0.4.6 requires numpy<2 and torch.
-    "hand": ["dex-retargeting==0.4.6"],
-  },
   python_requires='>=3.10',
 )
