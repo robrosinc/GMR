@@ -61,7 +61,7 @@ class GeneralMotionRetargeting:
         
         # compute the scale ratio based on given human height and the assumption in the IK config
         if actual_human_height is not None:
-            ratio = actual_human_height / ik_config["human_height_assumption"]
+            ratio = ik_config["human_height_assumption"] / actual_human_height
         else:
             ratio = 1.0
             
