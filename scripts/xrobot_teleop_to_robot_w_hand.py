@@ -539,8 +539,12 @@ class XRobotTeleopToRobot:
         self.motion_save_prefix = self.args.save_pkl_prefix
         self.motion_save_fps = max(1e-3, float(self.args.save_pkl_fps))
         self.motion_save_whole_session = bool(getattr(self.args, "save_pkl_whole_session", False))
+        self.motion_resume_discard_frames = max(
+            0, int(self.args.save_pkl_resume_discard_frames)
+        )
         self.motion_chunk_idx = 0
         self.motion_collecting = True
+        self.motion_discard_frames_remaining = 0
         self.motion_toggle_prev_pressed = False
         self.motion_toggle_last_time = 0.0
         self.motion_toggle_debounce_s = 0.35
@@ -809,7 +813,11 @@ class XRobotTeleopToRobot:
                 self.motion_qpos_buffer.clear()
                 self.motion_ts_buffer.clear()
                 self.motion_raw_xrobot_buffer.clear()
-                print("[REC] ON")
+                self.motion_discard_frames_remaining = self.motion_resume_discard_frames
+                print(
+                    "[REC] ON "
+                    f"(discarding first {self.motion_discard_frames_remaining} frames)"
+                )
             else:
                 saved = self.save_motion_chunk(force=True)
                 if saved:
@@ -864,6 +872,11 @@ class XRobotTeleopToRobot:
     ):
         """Record one retargeted qpos frame while collecting is ON."""
         if not self.enable_motion_save or not self.motion_collecting or qpos is None:
+            return
+        if self.motion_discard_frames_remaining > 0:
+            self.motion_discard_frames_remaining -= 1
+            if self.motion_discard_frames_remaining == 0:
+                print("[REC] resume capture started")
             return
         record_time = time.time()
         self.motion_qpos_buffer.append(qpos.copy())
@@ -1755,6 +1768,12 @@ def parse_arguments():
         type=float,
         default=30.0,
         help="FPS value stored in saved pkl motion data.",
+    )
+    parser.add_argument(
+        "--save_pkl_resume_discard_frames",
+        type=int,
+        default=30,
+        help="Discard this many retargeted frames after recording resumes (default: 10).",
     )
     parser.add_argument(
         "--save_pkl_toggle_with_right_key_one",
