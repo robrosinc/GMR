@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 import copy
+import csv
 import pickle
 from typing import Any, Callable
 
@@ -77,6 +78,15 @@ XROBOT_HAND_FINGER_CHAINS = (
 
 XROBOT_SKELETON_LINE_RGBA = np.array([0.1, 0.85, 1.0, 0.75])
 XROBOT_SKELETON_JOINT_RGBA = np.array([1.0, 0.9, 0.25, 0.9])
+PICO_DEVICE_NAMES = ("headset", "l_hand", "r_hand")
+PICO_DEVICE_LABELS = ("Headset", "L Hand", "R Hand")
+PICO_DEVICE_COMPONENTS = ("x", "y", "z", "qx", "qy", "qz", "qw")
+PICO_DEVICE_COLORS = (
+    (1.0, 0.2, 0.7, 1.0),
+    (0.2, 0.6, 1.0, 1.0),
+    (0.2, 1.0, 0.65, 1.0),
+)
+PICO_AXIS_COLORS = ((1.0, 0.25, 0.25, 1.0), (0.25, 1.0, 0.25, 1.0), (0.25, 0.5, 1.0, 1.0))
 
 UNITY_TO_GMR_ROTATION_MATRIX = np.array(
     [
@@ -185,6 +195,86 @@ class RawXRobotMotionLoader:
         except ValueError:
             relative_path = Path(motion_path.name)
         return relative_path.with_suffix("")
+
+
+@dataclass(frozen=True)
+class RawPicoDeviceMotion:
+    path: Path
+    poses: np.ndarray  # (frames, 3 devices, xyz + xyzw)
+
+    def frame_at(self, frame_idx: int) -> np.ndarray:
+        return self.poses[frame_idx]
+
+
+def load_raw_pico_device_motion(motion_path: str | Path, num_frames: int) -> RawPicoDeviceMotion | None:
+    """Load the device CSV paired with one retargeted motion clip."""
+    motion_path = Path(motion_path)
+    csv_path = motion_path.with_name(f"{motion_path.stem}_raw_devices.csv")
+    if not csv_path.is_file():
+        return None
+    expected_header = ["timestamp_ns"] + [
+        f"{name}_{component}" for name in PICO_DEVICE_NAMES for component in PICO_DEVICE_COMPONENTS
+    ]
+    legacy_header = expected_header + [
+        f"{name}_{component}"
+        for name in ("l_ankle", "r_ankle", "waist")
+        for component in PICO_DEVICE_COMPONENTS
+    ]
+    try:
+        with csv_path.open(newline="") as handle:
+            rows = csv.reader(handle)
+            header = next(rows, None)
+            if header not in (expected_header, legacy_header):
+                raise ValueError("unexpected CSV columns")
+            poses = []
+            for row in rows:
+                if len(row) != len(header):
+                    raise ValueError("incorrect CSV row width")
+                poses.append(
+                    np.asarray([float(value) for value in row[1:len(expected_header)]], dtype=float).reshape(3, 7)
+                )
+    except (OSError, ValueError) as exc:
+        rich_print(f"[yellow]Raw PICO device CSV skipped: {csv_path} ({exc})[/yellow]")
+        return None
+    if len(poses) != num_frames or not poses:
+        rich_print(
+            f"[yellow]Raw PICO device CSV skipped: {csv_path} "
+            f"({len(poses)} frames, motion has {num_frames})[/yellow]"
+        )
+        return None
+    rich_print(f"[cyan]Raw PICO devices: {csv_path}[/cyan]")
+    return RawPicoDeviceMotion(csv_path, np.stack(poses))
+
+
+def draw_pico_devices(
+    viewer,
+    device_poses: np.ndarray,
+    raw_xrobot_frame: dict[str, Any] | None,
+    root_pos: np.ndarray,
+    device_offset: np.ndarray,
+) -> None:
+    """Place only measured SDK device poses beside the skeleton."""
+    if device_poses.shape != (3, 7):
+        return
+    body_data = body_data_from_raw_frame(raw_xrobot_frame) if raw_xrobot_frame is not None else {}
+    pelvis = _pose_position(body_data, "Pelvis")
+    converted_positions = device_poses[:, :3] @ UNITY_TO_GMR_ROTATION_MATRIX.T
+    if pelvis is None:
+        valid_positions = converted_positions[
+            np.all(np.isfinite(device_poses), axis=1)
+            & (np.linalg.norm(device_poses[:, 3:], axis=1) >= 1e-6)
+        ]
+        pelvis = valid_positions[0] if len(valid_positions) else np.zeros(3)
+    group_origin = np.asarray(root_pos) + np.asarray(device_offset)
+    basis_rotation = R.from_matrix(UNITY_TO_GMR_ROTATION_MATRIX)
+    for index, pose in enumerate(device_poses):
+        if not np.all(np.isfinite(pose)) or np.linalg.norm(pose[3:]) < 1e-6:
+            continue
+        position = group_origin + converted_positions[index] - pelvis
+        orientation = (basis_rotation * R.from_quat(pose[3:] / np.linalg.norm(pose[3:]))).as_matrix()
+        _draw_user_sphere(viewer, position, 0.045, PICO_DEVICE_COLORS[index], PICO_DEVICE_LABELS[index])
+        for axis_index, color in enumerate(PICO_AXIS_COLORS):
+            _draw_user_arrow(viewer, position, position + 0.16 * orientation[:, axis_index], color)
 
 
 def draw_xrobot_skeleton(
@@ -355,7 +445,7 @@ def _draw_user_capsule(viewer, start: np.ndarray, end: np.ndarray, width: float,
     viewer.user_scn.ngeom += 1
 
 
-def _draw_user_sphere(viewer, pos: np.ndarray, radius: float, rgba: np.ndarray) -> None:
+def _draw_user_sphere(viewer, pos: np.ndarray, radius: float, rgba: np.ndarray, label: str | None = None) -> None:
     if viewer.user_scn.ngeom >= viewer.user_scn.maxgeom:
         return
     geom = viewer.user_scn.geoms[viewer.user_scn.ngeom]
@@ -367,4 +457,21 @@ def _draw_user_sphere(viewer, pos: np.ndarray, radius: float, rgba: np.ndarray) 
         mat=np.eye(3).flatten(),
         rgba=rgba,
     )
+    if label is not None:
+        geom.label = label
+    viewer.user_scn.ngeom += 1
+
+
+def _draw_user_arrow(viewer, start: np.ndarray, end: np.ndarray, rgba: tuple[float, ...]) -> None:
+    if viewer.user_scn.ngeom >= viewer.user_scn.maxgeom:
+        return
+    geom = viewer.user_scn.geoms[viewer.user_scn.ngeom]
+    mj.mjv_connector(
+        geom,
+        type=mj.mjtGeom.mjGEOM_ARROW,
+        width=0.008,
+        from_=start,
+        to=end,
+    )
+    geom.rgba[:] = rgba
     viewer.user_scn.ngeom += 1

@@ -1,23 +1,48 @@
-# localhost if you are using laptop to verify sim2sim or sim2real
-redis_ip="localhost"
+#!/usr/bin/env bash
+set -euo pipefail
 
-# the height (empirically) should be smaller than the actual human height, due to inaccuracy of the PICO estimation.
-actual_human_height=1.5
-python scripts/xrobot_teleop_to_robot_w_hand.py --robot robros_igris_c_v2 \
-             --actual_human_height $actual_human_height \
-             --redis_ip $redis_ip \
-             --target_fps 100 \
-             --measure_fps 1 \
-             --retarget_velocity_lpf_enabled true \
-             --retarget_velocity_lpf_cutoff_hz 8.0 \
-             --save_pkl_enabled true \
-             --save_pkl_dir pico/lpf_debug/ \
-             --save_pkl_every_n_steps 1000 \
-             --save_pkl_fps 100 \
-             --save_pkl_prefix pico \
-             --pinch_mode \
-             --show_raw_xrobot_skeleton false \
-             --raw_xrobot_skeleton_offset 0.0 1.2 0.0 \
-             --save_raw_xrobot_data false \
-            #  --save_pkl_whole_session \
-            #  --smooth \
+# Connection and retargeting
+redis_ip="localhost"
+actual_human_height=1.5  # PICO height estimate tends to run high.
+target_fps=100
+
+# Viewer: offsets are in the MuJoCo world frame (meters).
+show_raw_pico_devices=true
+raw_pico_devices_offset=(0.0 -1.2 0.0)
+show_raw_xrobot_skeleton=true
+raw_xrobot_skeleton_offset=(0.0 1.2 0.0)
+
+# Each recorded clip uses the same directory and index for motion, raw XRobot, and raw device files.
+save_pkl_enabled=true
+save_pkl_dir="pico/debug/"
+save_pkl_every_n_steps=1000
+save_pkl_fps=100
+save_pkl_prefix="pico"
+save_pkl_resume_discard_frames=30
+save_raw_xrobot_data=true
+
+# Original SDK device poses: one CSV per recorded motion clip.
+save_raw_device_poses=true
+
+python scripts/xrobot_teleop_to_robot_w_hand.py \
+    --robot robros_igris_c_v2 \
+    --actual_human_height "$actual_human_height" \
+    --redis_ip "$redis_ip" \
+    --target_fps "$target_fps" \
+    --measure_fps 1 \
+    --retarget_velocity_lpf_enabled true \
+    --retarget_velocity_lpf_cutoff_hz 8.0 \
+    --pinch_mode \
+    --show_raw_pico_devices "$show_raw_pico_devices" \
+    --raw_pico_devices_offset "${raw_pico_devices_offset[@]}" \
+    --show_raw_xrobot_skeleton "$show_raw_xrobot_skeleton" \
+    --raw_xrobot_skeleton_offset "${raw_xrobot_skeleton_offset[@]}" \
+    --save_pkl_enabled "$save_pkl_enabled" \
+    --save_pkl_dir "$save_pkl_dir" \
+    --save_pkl_every_n_steps "$save_pkl_every_n_steps" \
+    --save_pkl_fps "$save_pkl_fps" \
+    --save_pkl_prefix "$save_pkl_prefix" \
+    --save_pkl_resume_discard_frames "$save_pkl_resume_discard_frames" \
+    --save_raw_xrobot_data "$save_raw_xrobot_data" \
+    --save_raw_device_poses "$save_raw_device_poses" \
+    "$@"

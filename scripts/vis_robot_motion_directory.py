@@ -1,6 +1,7 @@
 import argparse
 from pathlib import Path
 
+import numpy as np
 from natsort import natsorted
 from rich import print
 from loop_rate_limiters import RateLimiter
@@ -11,6 +12,7 @@ from general_motion_retargeting import (
     RobotMotionViewer,
     load_robot_motion,
 )
+from general_motion_retargeting.raw_xrobot_motion import load_raw_pico_device_motion
 from vis_controls import (
     create_control_state,
     log_controls_once,
@@ -19,9 +21,11 @@ from vis_controls import (
 )
 
 
-def collect_motion_files(robot_motion_dir: Path, recursive: bool) -> list[Path]:
+def collect_motion_files(robot_motion_dir: Path, recursive: bool, pico_view: bool = False) -> list[Path]:
     pattern = "**/*.pkl" if recursive else "*.pkl"
     motion_files = [path for path in robot_motion_dir.glob(pattern) if path.is_file()]
+    if pico_view:
+        motion_files = [path for path in motion_files if not path.stem.endswith("_raw")]
     return natsorted(motion_files, key=lambda x: str(x))
 
 
@@ -36,6 +40,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--robot", type=str, default="unitree_g1")
     parser.add_argument("--robot_motion_dir", type=str, required=True)
+    parser.add_argument(
+        "--pico_view",
+        action="store_true",
+        help="Show synchronized raw XRobot skeleton and raw PICO devices from robot_motion_dir.",
+    )
     parser.add_argument(
         "--raw_xrobot_dir",
         type=str,
@@ -68,7 +77,7 @@ if __name__ == "__main__":
     if not robot_motion_dir.exists() or not robot_motion_dir.is_dir():
         raise NotADirectoryError(f"Motion directory not found: {robot_motion_dir}")
 
-    motion_files = collect_motion_files(robot_motion_dir, recursive=not args.non_recursive)
+    motion_files = collect_motion_files(robot_motion_dir, recursive=not args.non_recursive, pico_view=args.pico_view)
     if len(motion_files) == 0:
         raise FileNotFoundError(f"No .pkl files found under: {robot_motion_dir}")
 
@@ -80,10 +89,11 @@ if __name__ == "__main__":
     curation = MotionCurationList(resolve_curation_path(args.curation_txt_path))
     print(f"Curation file: {curation.path} (loaded {len(curation)} clips)")
     raw_xrobot_loader = RawXRobotMotionLoader(
-        args.raw_xrobot_dir,
+        robot_motion_dir if args.pico_view else args.raw_xrobot_dir,
         motion_root_dir=robot_motion_dir,
         log_fn=print,
     )
+    pico_device_offset = np.asarray(args.raw_xrobot_skeleton_offset) + np.array([0.0, 1.0, 0.0])
 
     viewer = None
     should_stop = False
@@ -105,6 +115,16 @@ if __name__ == "__main__":
             ) = load_robot_motion(motion_path)
             playback_fps = motion_fps * control_state["speed"]
             raw_xrobot_motion = raw_xrobot_loader.load_for_motion(motion_path)
+            num_frames = len(motion_root_pos)
+            if args.pico_view and raw_xrobot_motion is not None and len(raw_xrobot_motion.frames) != num_frames:
+                print(
+                    f"[yellow]Raw XRobot skipped: {raw_xrobot_motion.path} "
+                    f"({len(raw_xrobot_motion.frames)} frames, motion has {num_frames})[/yellow]"
+                )
+                raw_xrobot_motion = None
+            pico_device_motion = (
+                load_raw_pico_device_motion(motion_path, num_frames) if args.pico_view else None
+            )
 
             if viewer is None:
                 viewer = RobotMotionViewer(
@@ -125,7 +145,6 @@ if __name__ == "__main__":
                 current_clip_name = str(motion_path.relative_to(robot_motion_dir))
             except ValueError:
                 current_clip_name = str(motion_path)
-            num_frames = len(motion_root_pos)
             while True:
                 if not viewer_alive(viewer):
                     should_stop = True
@@ -170,6 +189,11 @@ if __name__ == "__main__":
                         else None
                     ),
                     xrobot_skeleton_offset=args.raw_xrobot_skeleton_offset,
+                    pico_device_poses=(
+                        pico_device_motion.frame_at(frame_idx)
+                        if pico_device_motion is not None else None
+                    ),
+                    pico_device_offset=pico_device_offset,
                     rate_limit=not args.no_rate_limit,
                 )
                 if control_state["clip_delta"] != 0:

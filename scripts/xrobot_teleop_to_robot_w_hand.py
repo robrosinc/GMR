@@ -23,6 +23,7 @@ Whole-Body Teleop Features:
 - Uses retargeted motion directly from the teleoperation stream
 """
 import argparse
+import csv
 import pathlib
 import os
 import pickle
@@ -92,6 +93,16 @@ XROBOT_HAND_FINGER_CHAINS = (
 
 XROBOT_SKELETON_LINE_RGBA = np.array([0.1, 0.85, 1.0, 0.75])
 XROBOT_SKELETON_JOINT_RGBA = np.array([1.0, 0.9, 0.25, 0.9])
+PICO_TO_VIEWER_ROTATION = R.from_matrix(
+    np.array([[1, 0, 0], [0, 0, -1], [0, 1, 0]])
+)
+PICO_DEVICE_AXIS_COLORS = (
+    np.array([1.0, 0.25, 0.25, 1.0]),
+    np.array([0.25, 1.0, 0.25, 1.0]),
+    np.array([0.25, 0.5, 1.0, 1.0]),
+)
+RAW_DEVICE_NAMES = ("headset", "l_hand", "r_hand")
+RAW_DEVICE_COMPONENTS = ("x", "y", "z", "qx", "qy", "qz", "qw")
 
 
 def build_xrobot_hand_skeleton_edges(side):
@@ -130,7 +141,22 @@ def draw_user_capsule(viewer, start, end, width, rgba):
     viewer.user_scn.ngeom += 1
 
 
-def draw_user_sphere(viewer, pos, radius, rgba):
+def draw_user_arrow(viewer, start, end, width, rgba):
+    if viewer.user_scn.ngeom >= viewer.user_scn.maxgeom:
+        return
+    geom = viewer.user_scn.geoms[viewer.user_scn.ngeom]
+    mj.mjv_connector(
+        geom,
+        type=mj.mjtGeom.mjGEOM_ARROW,
+        width=width,
+        from_=start,
+        to=end,
+    )
+    geom.rgba[:] = rgba
+    viewer.user_scn.ngeom += 1
+
+
+def draw_user_sphere(viewer, pos, radius, rgba, label=None):
     if viewer.user_scn.ngeom >= viewer.user_scn.maxgeom:
         return
     geom = viewer.user_scn.geoms[viewer.user_scn.ngeom]
@@ -142,7 +168,69 @@ def draw_user_sphere(viewer, pos, radius, rgba):
         mat=np.eye(3).flatten(),
         rgba=rgba,
     )
+    if label is not None:
+        geom.label = label
     viewer.user_scn.ngeom += 1
+
+
+def pico_sdk_pose_to_viewer(pose):
+    """Convert an SDK pose to the same axes used for XRobot body joints."""
+    try:
+        values = np.asarray(pose, dtype=float)
+    except (TypeError, ValueError):
+        return None
+    if values.shape != (7,) or not np.all(np.isfinite(values)):
+        return None
+    quat_norm = np.linalg.norm(values[3:])
+    if quat_norm < 1e-6:  # SDK defaults to an invalid zero pose before tracking.
+        return None
+    position = PICO_TO_VIEWER_ROTATION.apply(values[:3])
+    orientation = PICO_TO_VIEWER_ROTATION * R.from_quat(values[3:] / quat_norm)
+    return position, orientation.as_matrix()
+
+
+def ordered_raw_device_poses(raw):
+    """Return unmodified headset and controller SDK poses in CSV order."""
+    poses = np.full((3, 7), np.nan, dtype=float)
+
+    def sdk_pose(value):
+        try:
+            pose = np.asarray(value, dtype=float)
+        except (TypeError, ValueError):
+            return None
+        if pose.shape != (7,):
+            return None
+        return pose
+
+    for row, key in enumerate(("headset_pose", "left_controller_pose", "right_controller_pose")):
+        pose = sdk_pose(raw.get(key))
+        if pose is not None:
+            poses[row] = pose
+
+    return poses
+
+
+def xrobot_body_joint_to_viewer(body_data, name):
+    """Read an unretargeted SDK body joint already converted by XRobotStreamer."""
+    if not isinstance(body_data, dict) or name not in body_data:
+        return None
+    try:
+        position, quat_wxyz = body_data[name]
+        position = np.asarray(position, dtype=float)
+        quat_wxyz = np.asarray(quat_wxyz, dtype=float)
+    except (TypeError, ValueError):
+        return None
+    if (position.shape != (3,) or quat_wxyz.shape != (4,)
+            or not np.all(np.isfinite(position)) or not np.all(np.isfinite(quat_wxyz))
+            or np.linalg.norm(quat_wxyz) < 1e-6):
+        return None
+    orientation = R.from_quat(quat_wxyz[[1, 2, 3, 0]]).as_matrix()
+    return position, orientation
+
+
+def align_pico_position_to_viewer_world(position, source_pelvis, target_pelvis, scale):
+    """Use the retargeter's pelvis scale and ground alignment for SDK points."""
+    return target_pelvis + scale * (position - source_pelvis)
 
 
 def start_interpolation(state_machine, start_obs, end_obs, duration=1.0):
@@ -533,7 +621,7 @@ class XRobotTeleopToRobot:
         }
 
         # Optional motion recording (retargeted qpos -> pkl files)
-        self.enable_motion_save = bool(self.args.save_pkl_enabled) and (self.args.save_pkl_dir is not None)
+        self.enable_motion_save = bool(self.args.save_pkl_enabled) and self.args.save_pkl_dir is not None
         self.motion_save_dir = pathlib.Path(self.args.save_pkl_dir) if self.enable_motion_save else None
         self.motion_save_every_n_steps = max(1, self.args.save_pkl_every_n_steps)
         self.motion_save_prefix = self.args.save_pkl_prefix
@@ -551,7 +639,9 @@ class XRobotTeleopToRobot:
         self.motion_qpos_buffer = []
         self.motion_ts_buffer = []
         self.motion_raw_xrobot_buffer = []
+        self.motion_raw_device_buffer = []
         self.enable_raw_xrobot_save = self.enable_motion_save and bool(self.args.save_raw_xrobot_data)
+        self.enable_raw_device_save = self.enable_motion_save and bool(self.args.save_raw_device_poses)
         self.motion_keybody_names = []
         self.motion_keybody_ids = []
         self.motion_mj_data_save = None
@@ -566,6 +656,10 @@ class XRobotTeleopToRobot:
             "motion_repeat": False,
         }
         self.show_raw_xrobot_skeleton = bool(self.args.show_raw_xrobot_skeleton)
+        self.show_raw_pico_devices = bool(self.args.show_raw_pico_devices)
+        self.raw_pico_devices_offset = np.asarray(
+            self.args.raw_pico_devices_offset, dtype=float,
+        )
         self.raw_xrobot_skeleton_offset = np.asarray(
             self.args.raw_xrobot_skeleton_offset,
             dtype=float,
@@ -813,6 +907,7 @@ class XRobotTeleopToRobot:
                 self.motion_qpos_buffer.clear()
                 self.motion_ts_buffer.clear()
                 self.motion_raw_xrobot_buffer.clear()
+                self.motion_raw_device_buffer.clear()
                 self.motion_discard_frames_remaining = self.motion_resume_discard_frames
                 print(
                     "[REC] ON "
@@ -848,11 +943,13 @@ class XRobotTeleopToRobot:
         controller_data,
         headset_data,
         sdk_raw_data,
+        raw_device_data,
         record_time,
     ):
         return {
             "t_record_unix": float(record_time),
             "sdk_raw": self._jsonable(sdk_raw_data),
+            "raw_device": self._jsonable(raw_device_data),
             "body": self._jsonable(body_data),
             "left_hand": self._serialize_hand_frame(left_hand_data),
             "right_hand": self._serialize_hand_frame(right_hand_data),
@@ -869,6 +966,7 @@ class XRobotTeleopToRobot:
         controller_data=None,
         headset_data=None,
         sdk_raw_data=None,
+        raw_device_data=None,
     ):
         """Record one retargeted qpos frame while collecting is ON."""
         if not self.enable_motion_save or not self.motion_collecting or qpos is None:
@@ -890,9 +988,19 @@ class XRobotTeleopToRobot:
                     controller_data=controller_data,
                     headset_data=headset_data,
                     sdk_raw_data=sdk_raw_data,
+                    raw_device_data=raw_device_data,
                     record_time=record_time,
                 )
             )
+        if self.enable_raw_device_save:
+            timestamp_ns = controller_data.get("timestamp") if isinstance(controller_data, dict) else None
+            if timestamp_ns is None:
+                timestamp_ns = int(record_time * 1e9)
+            self.motion_raw_device_buffer.append(
+                (int(timestamp_ns), ordered_raw_device_poses(raw_device_data or {}))
+            )
+        if not self.motion_save_whole_session:
+            self.save_motion_chunk()
 
     def save_motion_chunk(self, force=False):
         """Save current motion buffer into a pkl chunk."""
@@ -908,6 +1016,10 @@ class XRobotTeleopToRobot:
         num_frames = len(qpos_arr)
         if num_frames == 0:
             return False
+        if self.enable_raw_xrobot_save and len(self.motion_raw_xrobot_buffer) != num_frames:
+            raise RuntimeError("Raw XRobot frame count does not match retargeted motion")
+        if self.enable_raw_device_save and len(self.motion_raw_device_buffer) != num_frames:
+            raise RuntimeError("Raw device frame count does not match retargeted motion")
 
         # Estimate real recording FPS from timestamps (for monitoring only).
         if num_frames >= 2:
@@ -960,9 +1072,16 @@ class XRobotTeleopToRobot:
             "saved_fps": float(aligned_fps),
             "measured_fps": float(measured_fps),
             "raw_xrobot_saved": bool(self.enable_raw_xrobot_save),
+            "raw_device_saved": bool(self.enable_raw_device_save),
         }
 
         save_path = self.motion_save_dir / f"{self.motion_save_prefix}_{self.motion_chunk_idx:04d}.pkl"
+        raw_device_save_path = (
+            self.motion_save_dir / f"{self.motion_save_prefix}_{self.motion_chunk_idx:04d}_raw_devices.csv"
+            if self.enable_raw_device_save else None
+        )
+        if raw_device_save_path is not None:
+            motion_data["record_meta"]["raw_device_file"] = raw_device_save_path.name
         with open(save_path, "wb") as f:
             pickle.dump(motion_data, f)
 
@@ -974,6 +1093,10 @@ class XRobotTeleopToRobot:
                 "meta": {
                     "source": "XRobotStreamer.get_current_frame",
                     "sdk_raw_key": "sdk_raw",
+                    "raw_device_key": "raw_device",
+                    "raw_device_description": (
+                        "Direct SDK headset and controller poses when device capture is enabled"
+                    ),
                     "normalized_input_keys": [
                         "body",
                         "left_hand",
@@ -989,9 +1112,10 @@ class XRobotTeleopToRobot:
                     },
                     "robot": self.retarget_robot_name,
                     "chunk_idx": self.motion_chunk_idx,
-                    "num_frames": min(num_frames, len(self.motion_raw_xrobot_buffer)),
+                    "num_frames": num_frames,
                     "raw_file": raw_save_path.name,
                     "motion_file": save_path.name,
+                    "raw_device_file": raw_device_save_path.name if raw_device_save_path is not None else None,
                     "record_start_unix": float(ts_arr[0]),
                     "record_end_unix": float(ts_arr[-1]),
                     "target_fps": float(self.target_fps),
@@ -1002,16 +1126,29 @@ class XRobotTeleopToRobot:
             with open(raw_save_path, "wb") as f:
                 pickle.dump(raw_data, f)
 
+        if raw_device_save_path is not None:
+            with raw_device_save_path.open("w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(
+                    ["timestamp_ns"]
+                    + [f"{name}_{component}" for name in RAW_DEVICE_NAMES for component in RAW_DEVICE_COMPONENTS]
+                )
+                for timestamp_ns, poses in self.motion_raw_device_buffer:
+                    writer.writerow([timestamp_ns, *poses.reshape(-1).tolist()])
+
         print(
             f"[SAVE] {save_path} "
             f"(frames={num_frames}, saved_fps={aligned_fps:.2f}, measured_fps={measured_fps:.2f})"
         )
         if raw_save_path is not None:
             print(f"[SAVE] {raw_save_path} (raw_xrobot_frames={len(raw_data['frames'])})")
+        if raw_device_save_path is not None:
+            print(f"[SAVE] {raw_device_save_path} (raw_device_frames={num_frames})")
         self.motion_chunk_idx += 1
         self.motion_qpos_buffer.clear()
         self.motion_ts_buffer.clear()
         self.motion_raw_xrobot_buffer.clear()
+        self.motion_raw_device_buffer.clear()
         return True
     
     def setup_mujoco_simulation(self):
@@ -1257,11 +1394,63 @@ class XRobotTeleopToRobot:
                 rgba=XROBOT_SKELETON_JOINT_RGBA,
             )
 
-    def update_visualization(self, qpos, smplx_data, left_hand_data, right_hand_data, viewer):
+    def draw_raw_pico_devices(self, viewer, body_data, qpos, raw):
+        """Draw SDK poses in the same grounded world frame as the robot."""
+        if not self.show_raw_pico_devices or self.teleop_data_streamer is None:
+            return []
+        if not hasattr(viewer, "user_scn") or viewer.user_scn is None:
+            return []
+
+        poses = ordered_raw_device_poses(raw)
+        source_pelvis = xrobot_body_joint_to_viewer(body_data, "Pelvis")
+        if source_pelvis is not None:
+            source_pelvis = source_pelvis[0]
+        scale = 1.0
+        target_pelvis = source_pelvis
+        if (qpos is not None and source_pelvis is not None and self.retarget is not None
+                and "Pelvis" in self.retarget.scaled_human_data):
+            scale = float(self.retarget.human_scale_table.get("Pelvis", 1.0))
+            target_pelvis = np.asarray(self.retarget.scaled_human_data["Pelvis"][0], dtype=float)
+        elif source_pelvis is not None:
+            feet = [xrobot_body_joint_to_viewer(body_data, name) for name in ("Left_Foot", "Right_Foot")]
+            feet = [pose[0] for pose in feet if pose is not None]
+            if feet:
+                target_pelvis = source_pelvis + np.array([0.0, 0.0, 0.1 - min(foot[2] for foot in feet)])
+
+        devices = []
+        headset = pico_sdk_pose_to_viewer(poses[0])
+        if headset is not None:
+            devices.append(("Headset", headset, 0.065, [1.0, 0.2, 0.7, 1.0]))
+        for label, pose_index, color in (
+            ("L Hand", 1, [0.2, 0.6, 1.0, 1.0]),
+            ("R Hand", 2, [0.2, 1.0, 0.65, 1.0]),
+        ):
+            pose = pico_sdk_pose_to_viewer(poses[pose_index])
+            if pose is not None:
+                devices.append((label, pose, 0.045, color))
+
+        visible_positions = []
+        for label, converted, radius, color in devices:
+            position, orientation = converted
+            if source_pelvis is not None and target_pelvis is not None:
+                position = align_pico_position_to_viewer_world(
+                    position, source_pelvis, target_pelvis, scale
+                )
+            position = position + self.raw_pico_devices_offset
+            draw_user_sphere(viewer, position, radius, color, label=label)
+            for axis_index, axis_color in enumerate(PICO_DEVICE_AXIS_COLORS):
+                draw_user_arrow(
+                    viewer,
+                    position,
+                    position + 0.18 * orientation[:, axis_index],
+                    width=0.008,
+                    rgba=axis_color,
+                )
+            visible_positions.append(position)
+        return visible_positions
+
+    def update_visualization(self, qpos, smplx_data, left_hand_data, right_hand_data, viewer, raw_device_data=None):
         """Update MuJoCo visualization"""
-        if qpos is None:
-            return
-            
         # Clean custom geometry
         if hasattr(viewer, 'user_scn') and viewer.user_scn is not None:
             viewer.user_scn.ngeom = 0
@@ -1287,6 +1476,7 @@ class XRobotTeleopToRobot:
             right_hand_data,
             viewer,
         )
+        device_positions = self.draw_raw_pico_devices(viewer, smplx_data, qpos, raw_device_data)
 
         # Update the simulation
         if qpos is not None:
@@ -1295,6 +1485,9 @@ class XRobotTeleopToRobot:
             
             # Camera follow the pelvis
             self._update_camera_position(viewer)
+        elif device_positions:
+            viewer.cam.lookat = np.mean(device_positions, axis=0)
+            viewer.cam.distance = 2.5
         
     def _update_camera_position(self, viewer):
         """Update camera to follow the robot"""
@@ -1529,10 +1722,17 @@ class XRobotTeleopToRobot:
                 f"- Retargeted motion save: ENABLED ({save_mode})"
             )
             print(f"- Raw XRobot data save: {self.enable_raw_xrobot_save}")
+        if self.enable_raw_device_save:
+            print(f"- Raw SDK device pose save: per motion clip in {self.motion_save_dir}")
         if self.show_raw_xrobot_skeleton:
             print(
                 "- Raw XRobot skeleton: ENABLED "
                 f"(offset={self.raw_xrobot_skeleton_offset.tolist()})"
+            )
+        if self.show_raw_pico_devices:
+            print(
+                "- Raw PICO devices in viewer: ENABLED "
+                f"(world offset={self.raw_pico_devices_offset.tolist()})"
             )
         if self.retarget_velocity_lpf_enabled:
             print(
@@ -1561,17 +1761,15 @@ class XRobotTeleopToRobot:
 
         self.maybe_auto_start_teleop(smplx_data)
 
+        raw_device_data = None
+        if ((self.enable_raw_device_save and self.motion_collecting
+                and self.motion_discard_frames_remaining == 0 and smplx_data is not None)
+                or (viewer is not None and self.show_raw_pico_devices)):
+            raw_device_data = self.teleop_data_streamer.get_raw_device_poses()
+
         qpos, current_retarget_obs = None, None
         if smplx_data is not None:
             qpos, current_retarget_obs = self.process_retargeting(smplx_data)
-            if viewer is not None:
-                self.update_visualization(
-                    qpos,
-                    smplx_data,
-                    left_hand_data,
-                    right_hand_data,
-                    viewer,
-                )
             self.record_motion_frame(
                 qpos,
                 body_data=smplx_data,
@@ -1580,6 +1778,16 @@ class XRobotTeleopToRobot:
                 controller_data=controller_data,
                 headset_data=headset_data,
                 sdk_raw_data=self.current_raw_xrobot_data,
+                raw_device_data=raw_device_data,
+            )
+        if viewer is not None and (qpos is not None or self.show_raw_pico_devices):
+            self.update_visualization(
+                qpos,
+                smplx_data,
+                left_hand_data,
+                right_hand_data,
+                viewer,
+                raw_device_data,
             )
 
         self.handle_state_transitions(current_retarget_obs)
@@ -1607,9 +1815,8 @@ class XRobotTeleopToRobot:
 
     def run(self):
         """Main execution loop"""
-        self.initialize_all_systems()
-
         try:
+            self.initialize_all_systems()
             if self.args.headless:
                 print("Headless mode enabled: MuJoCo viewer will not be launched.")
                 while True:
@@ -1726,6 +1933,20 @@ def parse_arguments():
         help="Draw the raw PICO/XRobot body skeleton beside the retargeted robot.",
     )
     parser.add_argument(
+        "--show_raw_pico_devices",
+        type=str2bool,
+        default=False,
+        help="Draw raw SDK headset and controllers in the MuJoCo viewer.",
+    )
+    parser.add_argument(
+        "--raw_pico_devices_offset",
+        type=float,
+        nargs=3,
+        default=[0.0, 0.0, 0.0],
+        metavar=("DX", "DY", "DZ"),
+        help="XYZ world offset in meters for all PICO device pose markers (default: 0 0 0).",
+    )
+    parser.add_argument(
         "--raw_xrobot_skeleton_offset",
         type=float,
         nargs=3,
@@ -1743,13 +1964,19 @@ def parse_arguments():
         "--save_raw_xrobot_data",
         type=str2bool,
         default=False,
-        help="Save raw PICO/XRobot input frames inside each retargeted motion pkl.",
+        help="Save full raw XRobot input frames beside retargeted motion pkl (requires --save_pkl_enabled true).",
+    )
+    parser.add_argument(
+        "--save_raw_device_poses",
+        type=str2bool,
+        default=False,
+        help="Save original SDK headset and controller poses as a CSV for each motion pkl clip (requires --save_pkl_enabled true).",
     )
     parser.add_argument(
         "--save_pkl_dir",
         type=str,
         default=None,
-        help="Directory to save retargeted motion pkl chunks (used when save_pkl_enabled=true).",
+        help="Directory for motion pkl chunks and raw device CSV files.",
     )
     parser.add_argument(
         "--save_pkl_every_n_steps",

@@ -6,7 +6,7 @@ import mujoco.viewer as mjv
 import imageio
 from scipy.spatial.transform import Rotation as R
 from general_motion_retargeting import ROBOT_XML_DICT, ROBOT_BASE_DICT, VIEWER_CAM_DISTANCE_DICT
-from .raw_xrobot_motion import draw_xrobot_skeleton
+from .raw_xrobot_motion import draw_pico_devices, draw_xrobot_skeleton
 from loop_rate_limiters import RateLimiter
 import numpy as np
 from rich import print
@@ -247,6 +247,8 @@ class RobotMotionViewer:
             # rate limit
             rate_limit=True, 
             follow_camera=None,
+            pico_device_poses=None,
+            pico_device_offset=np.array([0.0, 2.2, 0.0]),
             ):
         """
         by default visualize robot motion.
@@ -284,6 +286,7 @@ class RobotMotionViewer:
         if (
             human_motion_data is not None
             or xrobot_motion_data is not None
+            or pico_device_poses is not None
             or self.show_com_projection
             or self.viewer.user_scn.ngeom > 0
         ):
@@ -307,6 +310,15 @@ class RobotMotionViewer:
                 xrobot_motion_data,
                 np.asarray(root_pos),
                 np.asarray(xrobot_skeleton_offset),
+            )
+
+        if pico_device_poses is not None:
+            draw_pico_devices(
+                self.viewer,
+                pico_device_poses,
+                xrobot_motion_data,
+                np.asarray(root_pos),
+                np.asarray(pico_device_offset),
             )
 
         if self.show_com_projection:

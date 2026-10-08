@@ -103,6 +103,14 @@ class XRobotStreamer:
         right_pose = xrt.get_right_controller_pose()
         return right_pose
 
+    def get_raw_device_poses(self):
+        """Read headset and controller SDK poses without coordinate conversion."""
+        return {
+            "headset_pose": xrt.get_headset_pose(),
+            "left_controller_pose": xrt.get_left_controller_pose(),
+            "right_controller_pose": xrt.get_right_controller_pose(),
+        }
+
     def get_left_hand_data(self):
         left_hand_tracking_state = xrt.get_left_hand_tracking_state()
         left_hand_is_active = xrt.get_left_hand_is_active()
