@@ -12,7 +12,10 @@ from general_motion_retargeting import (
     RobotMotionViewer,
     load_robot_motion,
 )
-from general_motion_retargeting.raw_xrobot_motion import load_raw_pico_device_motion
+from general_motion_retargeting.raw_xrobot_motion import (
+    load_raw_pico_device_motion,
+    xrobot_pelvis_height,
+)
 from vis_controls import (
     create_control_state,
     log_controls_once,
@@ -57,7 +60,7 @@ if __name__ == "__main__":
         nargs=3,
         default=[0.0, 1.2, 0.0],
         metavar=("DX", "DY", "DZ"),
-        help="XYZ offset from retargeted root used to place the raw XRobot skeleton.",
+        help="XY offset from robot root; Z offset from raw pelvis aligned at the first frame.",
     )
     parser.add_argument("--non_recursive", action="store_true")
     parser.add_argument("--loop", action="store_true")
@@ -122,6 +125,14 @@ if __name__ == "__main__":
                     f"({len(raw_xrobot_motion.frames)} frames, motion has {num_frames})[/yellow]"
                 )
                 raw_xrobot_motion = None
+            raw_pelvis_z = (
+                xrobot_pelvis_height(raw_xrobot_motion.frame_at(0, num_frames))
+                if raw_xrobot_motion is not None else None
+            )
+            raw_skeleton_z_offset = (
+                float(motion_root_pos[0, 2] - raw_pelvis_z)
+                if raw_pelvis_z is not None else None
+            )
             pico_device_motion = (
                 load_raw_pico_device_motion(motion_path, num_frames) if args.pico_view else None
             )
@@ -189,6 +200,7 @@ if __name__ == "__main__":
                         else None
                     ),
                     xrobot_skeleton_offset=args.raw_xrobot_skeleton_offset,
+                    xrobot_skeleton_z_offset=raw_skeleton_z_offset,
                     pico_device_poses=(
                         pico_device_motion.frame_at(frame_idx)
                         if pico_device_motion is not None else None

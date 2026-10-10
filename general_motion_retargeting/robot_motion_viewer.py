@@ -249,6 +249,7 @@ class RobotMotionViewer:
             follow_camera=None,
             pico_device_poses=None,
             pico_device_offset=np.array([0.0, 2.2, 0.0]),
+            xrobot_skeleton_z_offset=None,
             ):
         """
         by default visualize robot motion.
@@ -310,6 +311,7 @@ class RobotMotionViewer:
                 xrobot_motion_data,
                 np.asarray(root_pos),
                 np.asarray(xrobot_skeleton_offset),
+                z_offset=xrobot_skeleton_z_offset,
             )
 
         if pico_device_poses is not None:

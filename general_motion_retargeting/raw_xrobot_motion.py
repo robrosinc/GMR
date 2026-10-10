@@ -282,6 +282,7 @@ def draw_xrobot_skeleton(
     raw_xrobot_frame: dict[str, Any],
     root_pos: np.ndarray,
     skeleton_offset: np.ndarray,
+    z_offset: float | None = None,
 ) -> None:
     if not isinstance(raw_xrobot_frame, dict):
         return
@@ -292,6 +293,8 @@ def draw_xrobot_skeleton(
         return
 
     placement_offset = root_pos + skeleton_offset - pelvis_pos
+    if z_offset is not None:
+        placement_offset[2] = z_offset + skeleton_offset[2]
     skeleton_edges = XROBOT_BODY_SKELETON_EDGES + XROBOT_HAND_SKELETON_EDGES
     edge_names = {name for edge in skeleton_edges for name in edge}
 
@@ -357,6 +360,13 @@ def body_data_from_raw_frame(frame: dict[str, Any]) -> dict[str, Any]:
     if isinstance(body_data, dict) and body_data:
         return copy.deepcopy(body_data)
     return body_data_from_sdk_raw(frame.get("sdk_raw"))
+
+
+def xrobot_pelvis_height(frame: dict[str, Any] | None) -> float | None:
+    if frame is None:
+        return None
+    pelvis = _pose_position(body_data_from_raw_frame(frame), "Pelvis")
+    return float(pelvis[2]) if pelvis is not None else None
 
 
 def body_data_from_sdk_raw(sdk_raw_data: dict[str, Any] | None) -> dict[str, list[list[float]]]:
