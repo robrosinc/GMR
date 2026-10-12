@@ -22,7 +22,6 @@ coverage.xml
 .hypothesis
 
 # IDEs
-.vscode/
 .idea/
 .codex
 .codex/
@@ -131,3 +130,7 @@ batch_twist1_to_csv.py
 yaml_to_flat_csv.py
 
 compute_rotation.py
+branch_structure.json
+temp_auto_push.bat
+temp_interactive_push.bat
+.gitignore
