@@ -258,7 +258,7 @@ def retarget_raw_pico_file(
         if not body_data:
             dropped_frames += 1
             continue
-        qpos = retargeter.retarget(body_data, offset_to_ground=True)
+        qpos = retargeter.retarget(body_data, offset_to_ground="True")
         qpos_list.append(qpos.copy())
 
     if not qpos_list:
