@@ -61,7 +61,8 @@ class GeneralMotionRetargeting:
         
         # compute the scale ratio based on given human height and the assumption in the IK config
         if actual_human_height is not None:
-            ratio = ik_config["human_height_assumption"] / actual_human_height
+            ratio = actual_human_height / ik_config["human_height_assumption"]
+            # ratio = ik_config["human_height_assumption"] / actual_human_height
         else:
             ratio = 1.0
             
@@ -103,6 +104,7 @@ class GeneralMotionRetargeting:
         self.setup_retarget_configuration()
         
         self.ground_offset = 0.0
+        self.initial_ground_lift = None
 
     def setup_retarget_configuration(self):
         self.configuration = mink.Configuration(self.model)
@@ -153,7 +155,9 @@ class GeneralMotionRetargeting:
         human_data = self.scale_human_data(human_data, self.human_root_name, self.human_scale_table)
         human_data = self.offset_human_data(human_data, self.pos_offsets1, self.rot_offsets1)
         human_data = self.apply_ground_offset(human_data)
-        if offset_to_ground:
+        if offset_to_ground == "raise_only":
+            human_data = self.offset_human_data_to_ground(human_data, raise_only=True)
+        elif offset_to_ground:
             human_data = self.offset_human_data_to_ground(human_data)
         self.scaled_human_data = human_data
 
@@ -283,8 +287,8 @@ class GeneralMotionRetargeting:
            
         return offset_human_data
             
-    def offset_human_data_to_ground(self, human_data):
-        """find the lowest point of the human data and offset the human data to the ground"""
+    def offset_human_data_to_ground(self, human_data, raise_only=False):
+        """Move the lowest foot to ground, or only lift feet below the initial level."""
         offset_human_data = {}
         ground_offset = 0.1
         lowest_pos = np.inf
@@ -296,15 +300,24 @@ class GeneralMotionRetargeting:
             pos, quat = human_data[body_name]
             if pos[2] < lowest_pos:
                 lowest_pos = pos[2]
-                lowest_body_name = body_name
+        if not np.isfinite(lowest_pos):
+            raise ValueError("No foot position found for ground alignment")
+        if raise_only:
+            # Align an arbitrary source floor once; keep upward foot motion thereafter.
+            if self.initial_ground_lift is None:
+                self.initial_ground_lift = max(0.0, ground_offset - lowest_pos)
+            z_shift = max(self.initial_ground_lift, ground_offset - lowest_pos)
+        else:
+            z_shift = ground_offset - lowest_pos
         for body_name in human_data.keys():
             pos, quat = human_data[body_name]
             offset_human_data[body_name] = [pos, quat]
-            offset_human_data[body_name][0] = pos - np.array([0, 0, lowest_pos]) + np.array([0, 0, ground_offset])
+            offset_human_data[body_name][0] = pos + np.array([0, 0, z_shift])
         return offset_human_data
 
     def set_ground_offset(self, ground_offset):
         self.ground_offset = ground_offset
+        self.initial_ground_lift = None
 
     def apply_ground_offset(self, human_data):
         for body_name in human_data.keys():
