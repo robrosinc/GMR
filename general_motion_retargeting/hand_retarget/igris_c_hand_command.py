@@ -318,6 +318,12 @@ def controller_active(controller: Any, threshold: float = CONTROLLER_ACTIVITY_TH
     return any(abs(float(axis)) > threshold for axis in thumbstick)
 
 
+def controller_tracked(controller: Any) -> bool:
+    """True when the sender reports the controller as tracked by the XR runtime (vr_link 2.1 ``tracked``)."""
+
+    return controller is not None and bool(getattr(controller, "tracked", False))
+
+
 HAND_SOURCES = ("hand", "grip", "hold")
 FORCED_SOURCES = (None, "hand", "grip")
 
@@ -325,15 +331,20 @@ FORCED_SOURCES = (None, "hand", "grip")
 class HandSourceArbiter:
     """Per-hand choice between hand tracking, controller grip, and holding.
 
-    The VRS1 uplink carries no explicit "controller held" flag; the headset's
-    own swap signal is the per-frame ``HandState.tracked``. Rules per hand:
+    The headset's swap signal is the per-frame ``HandState.tracked`` (hand
+    tracking and controllers are exclusive on PICO) plus, since vr_link 2.1,
+    ``ControllerInput.tracked`` (the runtime tracks the controller, i.e. the
+    operator holds it). Rules per hand:
 
     * forced ``"grip"`` -> ``"grip"``; forced ``"hand"`` -> ``"hand"`` while
       tracked, otherwise ``"hold"``.
     * auto: no hand state at all (sender without hand tracking) -> ``"grip"``;
-      tracked -> ``"hand"``; untracked with controller activity -> ``"grip"``
-      (the operator picked the controller up); untracked and idle -> ``"hold"``
-      (an occluded bare hand must not open and drop what it holds).
+      hand tracked -> ``"hand"``; hand untracked with the controller tracked or
+      with controller activity -> ``"grip"`` (the operator holds the controller,
+      idle or not); hand untracked, controller untracked and idle -> ``"hold"``
+      (an occluded bare hand must not open and drop what it holds). Senders
+      without ``ControllerInput.tracked`` leave it false, so only activity
+      promotes an idle controller to ``"grip"`` there.
 
     ``"grip"`` writes ``grip * GRIP_FULL_COMMAND`` to all six motors of the hand.
 
@@ -372,7 +383,7 @@ class HandSourceArbiter:
             decision = "grip"
         elif tracked:
             decision = "hand"
-        elif controller_active(controller_input, self._threshold):
+        elif controller_tracked(controller_input) or controller_active(controller_input, self._threshold):
             decision = "grip"
         else:
             decision = "hold"
@@ -476,6 +487,7 @@ __all__ = [
     "SIDE_MOTOR_SLOTS",
     "bone_angle",
     "controller_active",
+    "controller_tracked",
     "finger_flexion_sums",
     "grip_to_normalized",
     "hand_keypoints_to_normalized",
